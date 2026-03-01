@@ -1,0 +1,27 @@
+/* Reset & base */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --bg: #0a0f0d;
+    --surface: #0b0f0e;
+    --border: #4f7562;
+    --accent: #d2910a;
+    --accent2: #d45506;
+    --text: #e2f0eb;
+    --muted: rgb(185, 167, 155);
+    --radius: 10px;
+    font-size: 16px;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+}

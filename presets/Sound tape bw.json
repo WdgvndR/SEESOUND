@@ -1,0 +1,108 @@
+{
+  "name": "Sound tape bw",
+  "params": {
+    "inputGain": 3,
+    "amplitudeThreshold": -85,
+    "perceptualLoudness": 60,
+    "attackSensitivity": 0,
+    "releaseDecay": 0.05,
+    "defaultParticleSize": 1,
+    "freqDepthEffect": 0,
+    "magnitudeSizeRatio": 0,
+    "amplitudeSizeStrength": 0,
+    "pitchSizeInversion": 0,
+    "sizeExponent": 4,
+    "saliencyWeight": 100,
+    "harmonicRoughness": 100,
+    "edgeSoftness": 0,
+    "shapeComplexity": 64,
+    "saturationFloor": 20,
+    "dissonanceDesat": 0,
+    "brightnessScaling": 0,
+    "blendMode": "luminosity",
+    "layoutMode": 1,
+    "persistMode": 1,
+    "octaveScaling": 50,
+    "zDepth": 40,
+    "harmonicClarity": 70,
+    "atmosphericPressure": 30,
+    "lfWash": 40,
+    "entropy": 20,
+    "kineticPendulum": 50,
+    "acousticFriction": 40,
+    "magneticOrientation": 50,
+    "fluidDynamics": 30,
+    "phaseInterference": 25,
+    "fieldRendering": 50,
+    "chromaticGravity": 50,
+    "depthDisplacement": 30,
+    "sourceSeparation": 50,
+    "interInstrumental": 50,
+    "noteColors": {
+      "C": [
+        220,
+        30,
+        30
+      ],
+      "C#": [
+        220,
+        90,
+        20
+      ],
+      "D": [
+        210,
+        145,
+        10
+      ],
+      "D#": [
+        190,
+        190,
+        10
+      ],
+      "E": [
+        120,
+        210,
+        20
+      ],
+      "F": [
+        30,
+        200,
+        80
+      ],
+      "F#": [
+        20,
+        185,
+        160
+      ],
+      "G": [
+        10,
+        145,
+        210
+      ],
+      "G#": [
+        20,
+        80,
+        220
+      ],
+      "A": [
+        70,
+        20,
+        220
+      ],
+      "A#": [
+        130,
+        15,
+        200
+      ],
+      "B": [
+        200,
+        15,
+        120
+      ]
+    },
+    "colorInputMode": "rgb",
+    "freqColorTable": {},
+    "lightnessMin": 0.2,
+    "lightnessMax": 0.85
+  }
+}

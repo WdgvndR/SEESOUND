@@ -1,0 +1,35 @@
+# SEESOUND
+
+SEESOUND is a real-time audio-reactive rendering engine that maps musical components (amplitude, frequency, dissonance, clarity) to visual properties (size, colour, physics, shapes) via a configurable node-based routing system.
+
+## Prerequisites
+
+To run this on Windows, you will need two things installed on your computer:
+
+1. **Python 3.10+** (Make sure to tick "Add Python to PATH" during installation)
+2. **Node.js** (LTS version)
+   - After installing Node.js, install `pnpm` by opening Command Prompt and typing: `npm install -g pnpm`
+
+## First Time Setup
+
+If this is your first time downloading the project, you need to install the dependencies.
+
+**Double-click `install.bat`** in the main folder.
+
+*What it does:*
+- Creates an isolated Python virtual environment (`.venv`)
+- Installs all backend requirements (FastAPI, NumPy, sounddevice, librosa)
+- Installs all frontend node packages via pnpm
+
+## Running the App
+
+**Double-click `start.bat`** in the main folder.
+
+*What it does:*
+- Starts the FastAPI audio analysis server on port 8000
+- Starts the Vite React frontend server
+- Automatically opens your web browser to the SEESOUND interface
+
+### Troubleshooting
+- **No Mic Input?** Check the terminal window running the backend to see if `sounddevice` is picking up your default microphone.
+- **"pnpm is not recognized"**: Ensure you installed `pnpm` (`npm install -g pnpm`) and that your terminal path is updated.

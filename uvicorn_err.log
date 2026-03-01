@@ -1,0 +1,46 @@
+Task exception was never retrieved
+future: <Task finished name='Task-25' coro=<_run_analysis_job() done, defined at D:\3CREATIVE\Music to Picture\SEESOUND\backend\main.py:145> exception=LibsndfileError(1, "Error opening 'C:\\\\Users\\\\Acer\\\\AppData\\\\Local\\\\Temp\\\\tmpku4zsbmm.m4a': ")>
+Traceback (most recent call last):
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\backend\main.py", line 161, in _run_analysis_job
+    async for frame_dict in _iter_in_executor(loop, _blocking_gen):
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\backend\main.py", line 140, in _iter_in_executor
+    raise value
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\backend\main.py", line 126, in _produce
+    for item in gen_factory():
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\backend\main.py", line 154, in _blocking_gen
+    for frame in analyze_file(audio_path, params):
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\backend\audio_analyzer.py", line 471, in analyze_file
+    audio_np, sr = sf.read(str(path), dtype="float32", always_2d=True)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\.venv\Lib\site-packages\soundfile.py", line 285, in read
+    with SoundFile(file, 'r', samplerate, channels,
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\.venv\Lib\site-packages\soundfile.py", line 658, in __init__
+    self._file = self._open(file, mode_int, closefd)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\.venv\Lib\site-packages\soundfile.py", line 1216, in _open
+    raise LibsndfileError(err, prefix="Error opening {0!r}: ".format(self.name))
+soundfile.LibsndfileError: Error opening 'C:\\Users\\Acer\\AppData\\Local\\Temp\\tmpku4zsbmm.m4a': Format not recognised.
+Task exception was never retrieved
+future: <Task finished name='Task-53' coro=<_run_analysis_job() done, defined at D:\3CREATIVE\Music to Picture\SEESOUND\backend\main.py:145> exception=LibsndfileError(1, "Error opening 'C:\\\\Users\\\\Acer\\\\AppData\\\\Local\\\\Temp\\\\tmptdp1uv66.m4a': ")>
+Traceback (most recent call last):
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\backend\main.py", line 161, in _run_analysis_job
+    async for frame_dict in _iter_in_executor(loop, _blocking_gen):
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\backend\main.py", line 140, in _iter_in_executor
+    raise value
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\backend\main.py", line 126, in _produce
+    for item in gen_factory():
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\backend\main.py", line 154, in _blocking_gen
+    for frame in analyze_file(audio_path, params):
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\backend\audio_analyzer.py", line 471, in analyze_file
+    audio_np, sr = sf.read(str(path), dtype="float32", always_2d=True)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\.venv\Lib\site-packages\soundfile.py", line 285, in read
+    with SoundFile(file, 'r', samplerate, channels,
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\.venv\Lib\site-packages\soundfile.py", line 658, in __init__
+    self._file = self._open(file, mode_int, closefd)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\3CREATIVE\Music to Picture\SEESOUND\.venv\Lib\site-packages\soundfile.py", line 1216, in _open
+    raise LibsndfileError(err, prefix="Error opening {0!r}: ".format(self.name))
+soundfile.LibsndfileError: Error opening 'C:\\Users\\Acer\\AppData\\Local\\Temp\\tmptdp1uv66.m4a': Format not recognised.

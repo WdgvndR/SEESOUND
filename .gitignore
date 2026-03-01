@@ -1,0 +1,26 @@
+# Environments
+.venv/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.eslintcache
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# VS Code specific
+.vscode/
+
+# Ignore backups if any
+*_backup
+*.bak
