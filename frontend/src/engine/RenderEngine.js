@@ -135,7 +135,7 @@ export class RenderEngine {
         // Darken-group modes look best on a light canvas; everything else on dark
         var isLightBg = blendMode === 'multiply' || blendMode === 'color-burn' || blendMode === 'darken'
 
-        // layoutMode:  0 = Linear (time→X, log-freq→Y), 1 = L-System 2D, 2 = Circular (full-range)
+        // layoutMode:  0 = Linear (time→X, log-freq→Y), 1 = L-System 2D, 2 = Circular (full-range), 9 = Freq×Stereo (pan→X, log-freq→Y), 10 = Amp×Stereo (pan→X, dBFS→Y)
         // persistMode:  0 = Momentary (fade/trail),    1 = Painting (marks persist forever)
         var layoutMode = (params.layoutMode != null) ? params.layoutMode : 0
         var persistMode = (params.persistMode != null) ? params.persistMode : 0
@@ -243,6 +243,21 @@ export class RenderEngine {
                     : (this.trackDuration > 1.0 ? this.trackDuration : Math.max(time * 1.1, 1.0))
                 cx = clamp(renderTime / trackDur, 0, 1) * w
                 cy = (1 - freqLogNorm) * h
+            } else if (layoutMode === 9) {
+                // 2D Freq × Stereo: X = stereo pan (left→right), Y = log-frequency (bass=bottom, treble=top)
+                cx = ((c.pan + 1) / 2) * w
+                cy = (1 - freqLogNorm) * h
+            } else if (layoutMode === 10) {
+                // 2D Amp × Stereo: X = stereo pan (left→right), Y = amplitude in dBFS
+                //   top    = params.amplitudeThreshold  (noise floor, quietest plotted signal)
+                //   bottom = params.ampstereoLimit       (loudest / ceiling)
+                var _threshDb = (params.amplitudeThreshold != null) ? params.amplitudeThreshold : -48
+                var _limitDb = (params.ampstereoLimit != null) ? params.ampstereoLimit : -6
+                var _dbRange = _limitDb - _threshDb   // positive, e.g. 42
+                var _ampDb = 20 * Math.log10(Math.max(c.amplitude, 1e-10))
+                var _t = clamp((_ampDb - _threshDb) / _dbRange, 0, 1)
+                cx = ((c.pan + 1) / 2) * w
+                cy = _t * h
             } else {
                 // Circular mode: adaptive squircle — n=2 (circle) at center, n→∞ (rectangle) at edge
                 // c.x = pan (–1..+1), c.y = consonance (+1=consonant/top, –1=dissonant/bottom)

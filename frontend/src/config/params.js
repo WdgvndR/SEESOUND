@@ -9,6 +9,9 @@
  *   4 = 3D Linear       — left→right with Z-depth per frequency band
  *   5 = 3D Spiral       — linear + circular combined helix, particles
  *   6 = 3D L-System     — fractal tree in 3D, infinite canvas, bounding-box PNG
+ *   8 = Amp × Stereo    — scatter: X=stereo, Y=amplitude, color=frequency (2D overlay)
+ *   9 = 2D Freq × Stereo  — X=stereo pan, Y=log-frequency pitch (like 2D Linear) (2D canvas)
+ *  10 = 2D Amp × Stereo   — X=stereo pan, Y=amplitude in dBFS (threshold→ceiling) (2D canvas)
  */
 
 // ── Parameter group definitions ─────────────────────────────────────────────
@@ -23,6 +26,8 @@ export const PARAM_GROUPS = [
     { id: 'linear', label: 'Linear Layout', layouts: [0] },
     { id: 'lsystem2d', label: 'L-System 2D', layouts: [1] },
     { id: 'circular', label: 'Circular Layout', layouts: [2] },
+    { id: 'ampstereo', label: '2D Freq × Stereo Layout', layouts: [9] },
+    { id: 'amp2d', label: '2D Amp × Stereo Layout', layouts: [10] },
     { id: 'threed', label: '3D Common', layouts: [3, 4, 5, 6] },
     { id: 'camera', label: 'Camera Controls', layouts: [3, 4, 5, 6] },
     { id: '3dlinear', label: '3D Linear', layouts: [4] },
@@ -47,6 +52,9 @@ export const PARAMS = [
             { label: '3D Linear (with depth)', value: 4 },
             { label: '3D Spiral', value: 5 },
             { label: '3D L-System (infinite)', value: 6 },
+            { label: 'Amp × Stereo × Freq Color', value: 8 },
+            { label: '2D Freq × Stereo', value: 9 },
+            { label: '2D Amp × Stereo', value: 10 },
         ],
     },
     {
@@ -131,6 +139,15 @@ export const PARAMS = [
     { key: 'lsGrowthSpeed', group: 'lsystem2d', label: 'Growth Speed', min: 0.01, max: 1, step: 0.01, default: 0.09, unit: 'x', desc: 'Fraction of canvas short-side moved per second.', canDisable: true },
     { key: 'lsLineWidth', group: 'lsystem2d', label: 'Line Width', min: 0.3, max: 8, step: 0.1, default: 2.2, unit: 'px', desc: 'Base stroke width (tapers per generation).', canDisable: false },
     { key: 'lsMaxBranches', group: 'lsystem2d', label: 'Max Branches', min: 10, max: 500, step: 10, default: 300, unit: '', desc: 'Memory cap: dead branches pruned above this.', canDisable: false },
+
+    // ─── Layout 9: 2D Freq × Stereo ────────────────────────────────────────────────
+    // X = stereo pan [-1 … +1], Y = log-frequency (bass bottom, treble top).
+    { key: 'chromaticGravity', group: 'ampstereo', label: 'Chromatic Gravity', min: 0, max: 100, step: 1, default: 0, unit: '%', desc: 'Pull all bins toward canvas centre (stereo=0, mid-frequency).', canDisable: true, neutralValue: 0 },
+    { key: 'magneticOrientation', group: 'ampstereo', label: 'Magnetic Orientation', min: 0, max: 100, step: 1, default: 0, unit: '%', desc: 'Collapse pan toward stereo centre (X=0).', canDisable: true, neutralValue: 0 },
+
+    // ─── Layout 10: 2D Amp × Stereo ──────────────────────────────────────────────
+    // X = stereo pan [-1 … +1], Y = amplitude in dBFS (threshold=top, ceiling=bottom).
+    { key: 'ampstereoLimit', group: 'amp2d', label: 'Amplitude Ceiling', min: -24, max: 0, step: 1, default: -6, unit: 'dB', desc: 'Bottom edge of the Y axis. Components at this dBFS level appear at the bottom. Top edge = Amplitude Threshold.', canDisable: false },
 
     // ─── Layout 2: Circular ──────────────────────────────────────────────────
     { key: 'circRadiusScale', group: 'circular', label: 'Radius Scale', min: 0.2, max: 2, step: 0.05, default: 1, unit: 'x', desc: 'Scale the polar radius of every component.', canDisable: true, neutralValue: 1 },

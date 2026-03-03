@@ -29,7 +29,8 @@ export function useWebSocket(onMessage) {
     useEffect(() => { onMessageRef.current = onMessage }, [onMessage])
 
     const connect = useCallback(() => {
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) return
+        // Guard against CONNECTING (0) as well as OPEN (1) to prevent duplicate sockets
+        if (ws.current && ws.current.readyState <= WebSocket.OPEN) return
 
         setStatus('connecting')
         const socket = new WebSocket(WS_URL)

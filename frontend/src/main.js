@@ -798,7 +798,7 @@ function _buildComponents(freqData, tonicHz, gainMult, linThreshold) {
 // ── 6-helper-b  LAYOUT POSITION CALCULATOR  (modes 0–1 only)
 //
 //  Returns {x, y, z} in Three.js world units for one FFT bin.
-//  Modes 2-7 are handled by the 2-D overlay canvas (_updateOverlay2D).
+//  Modes 2-9 are handled by the 2-D overlay canvas (_updateOverlay2D).
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _getLayoutPosition(bin, hz, energy, tonicHz, now, spatial, layoutMode, N) {
@@ -839,7 +839,22 @@ function _getLayoutPosition(bin, hz, energy, tonicHz, now, spatial, layoutMode, 
             }
         }
 
-        // Modes 2-7 are rendered by the 2-D overlay canvas; return origin as no-op.
+        case 9: {
+            // ── Amp × Stereo: flat 2-D scatter using the Three.js particle system ───
+            // X = per-bin stereo pan  →  full left edge … full right edge
+            // Y = amplitude (energy)  →  bottom (silent) … top (loud)
+            // Z = 0 (flat plane — use zDepth slider for subtle layering via entropy)
+            // Color comes from freq automatically via colorEngine in _updateParticles.
+            const pan9 = _perBinPan(bin, N)
+            const { hw, hh } = _viewportHalfDims()
+            return {
+                x: pan9 * hw,
+                y: (Math.min(energy, 1) * 2 - 1) * hh,
+                z: 0,
+            }
+        }
+
+        // Modes 2-8 are rendered by the 2-D overlay canvas; return origin as no-op.
         default: return { x: 0, y: 0, z: 0 }
     }
 }
@@ -1623,6 +1638,129 @@ function _render2DHarmonicGravity(components, w, h, blendMode, persistMode, time
     for (const pk in gst.particles) { if (!nowKeys.has(pk)) delete gst.particles[pk] }
 }
 
+// ── Mode 8: Amplitude × Stereo × Frequency Color scatter ─────────────
+// Each active FFT bin is placed as a dot on a 2-D scatter plot:
+//   X = per-bin stereo pan  → left (-1) … right (+1)
+//   Y = amplitude            → silent (bottom) … loud (top)
+//   Color                   = frequency via the active color scheme
+// Dot radius and alpha scale with amplitude for a natural emphasis on peaks.
+function _render2DAmpStereo(freqData, gainMult, linThreshold, w, h, blendMode) {
+    overlayCtx.globalCompositeOperation = blendMode
+    const N = freqData.length
+    const sampleRate = audioEngine.ctx?.sampleRate ?? 44100
+    const nyquist = sampleRate / 2
+
+    // Axis labels
+    overlayCtx.save()
+    overlayCtx.globalAlpha = 0.35
+    overlayCtx.fillStyle = '#ffffff'
+    overlayCtx.font = '11px monospace'
+    overlayCtx.textAlign = 'center'
+    overlayCtx.fillText('◀ L', w * 0.04, h * 0.5)
+    overlayCtx.fillText('R ▶', w * 0.96, h * 0.5)
+    overlayCtx.textAlign = 'left'
+    overlayCtx.fillText('loud', 6, 14)
+    overlayCtx.fillText('soft', 6, h - 4)
+    overlayCtx.restore()
+
+    for (let i = 1; i < N; i++) {
+        const hz = (i / N) * nyquist
+        if (hz < 20 || hz > 20000) continue
+        const amp = Math.min((freqData[i] / 255) * gainMult, 1)
+        if (amp < linThreshold * 0.8) continue
+
+        // X: per-bin stereo pan in [-1, +1] mapped to [0, w]
+        const pan = _perBinPan(i, N)
+        const px = ((pan + 1) / 2) * w
+
+        // Y: amplitude [0,1] → top (loud) = 0, bottom (silent) = h
+        const py = (1 - amp) * h
+
+        const cr = colorEngine.freqToColor(hz)
+        const [r, g, b] = cr.rgb
+        const radius = Math.max(1.5, amp * 14)
+        const alpha = (0.2 + amp * 0.8).toFixed(2)
+
+        overlayCtx.beginPath()
+        overlayCtx.arc(px, py, radius, 0, Math.PI * 2)
+        overlayCtx.fillStyle = 'rgba(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ',' + alpha + ')'
+        overlayCtx.fill()
+    }
+}
+
+// ── Mode 9: 2D Amp × Stereo — component-based scatter (2D canvas) ─────────
+// Each spectral-peak component is placed as a dot:
+//   X = stereo pan  → full left (0) … full right (w)
+//   Y = amplitude   → loud (top, 0) … silent (bottom, h)
+//   Color           = component colour via active colour scheme
+// Painting / Momentary persistence is controlled by _updateOverlay2D.
+// Optional physics: chromaticGravity, magneticOrientation, interInstrumental.
+// ── Mode 9: 2D Freq × Stereo — raw-bin scatter (2D canvas) ──────────────────
+// X = per-bin stereo pan  →  -1 (left edge) … 0 (centre) … +1 (right edge)
+// Y = log-frequency pitch →  bass (bottom) … treble (top) — identical to 2D Linear
+// Dot size & alpha scale with amplitude. Color from active colour scheme.
+// Painting / Momentary handled by _updateOverlay2D before this is called.
+function _render2DAmpStereoComponents(freqData, gainMult, linThreshold, w, h, blendMode) {
+    overlayCtx.globalCompositeOperation = blendMode
+    const N = freqData.length
+    const sampleRate = audioEngine.ctx?.sampleRate ?? 44100
+    const nyquist = sampleRate / 2
+    const LOG_RANGE = Math.log2(16000 / 16)   // octaves from 16 Hz to 16 kHz
+
+    // Axis labels
+    overlayCtx.save()
+    overlayCtx.globalAlpha = 0.35
+    overlayCtx.fillStyle = '#ffffff'
+    overlayCtx.font = '11px monospace'
+    overlayCtx.textAlign = 'center'
+    overlayCtx.fillText('◀ L', w * 0.04, h * 0.5)
+    overlayCtx.fillText('R ▶', w * 0.96, h * 0.5)
+    overlayCtx.textAlign = 'right'
+    overlayCtx.fillText('16k', w - 4, 14)
+    overlayCtx.fillText('16', w - 4, h - 4)
+    overlayCtx.restore()
+
+    const baseRadius = Math.max(1.5, (params.defaultParticleSize || 4))
+    const gravStr = (params.chromaticGravity || 0) / 100
+    const magStr = (params.magneticOrientation || 0) / 100
+
+    for (let i = 1; i < N; i++) {
+        const hz = (i / N) * nyquist
+        if (hz < 16 || hz > 20000) continue
+        const amp = Math.min((freqData[i] / 255) * gainMult, 1)
+        if (amp < linThreshold * 0.8) continue
+
+        // X: per-bin stereo pan [-1, +1] → [0, w]
+        const pan = _perBinPan(i, N)
+        let px = ((pan + 1) / 2) * w
+
+        // Y: log-frequency → treble at top, bass at bottom (same as 2D Linear)
+        const freqLogNorm = Math.min(Math.log2(Math.max(hz, 16) / 16) / LOG_RANGE, 1)
+        let py = (1 - freqLogNorm) * h
+
+        // Chromatic gravity — pull toward canvas centre
+        if (gravStr > 0) {
+            px = px + (w * 0.5 - px) * gravStr
+            py = py + (h * 0.5 - py) * gravStr
+        }
+
+        // Magnetic orientation — collapse X toward stereo centre
+        if (magStr > 0) {
+            px = px + (w * 0.5 - px) * magStr
+        }
+
+        const cr = colorEngine.freqToColor(hz)
+        const [r, g, b] = cr.rgb
+        const radius = Math.max(1, baseRadius * amp)
+        const alpha = (0.2 + amp * 0.8).toFixed(2)
+
+        overlayCtx.beginPath()
+        overlayCtx.arc(px, py, radius, 0, Math.PI * 2)
+        overlayCtx.fillStyle = 'rgba(' + Math.round(r) + ',' + Math.round(g) + ',' + Math.round(b) + ',' + alpha + ')'
+        overlayCtx.fill()
+    }
+}
+
 // ── Mode 7: Phase-Space Orbital (Lissajous Modulation) ─────────────────
 // Each spectral peak traces a small Lissajous orbit around its circular
 // (pan×consonance) canvas position, using real L/R time-domain data.
@@ -1680,7 +1818,7 @@ function _render2DPhaseOrbit(components, w, h, blendMode, persistMode, time) {
     }
 }
 
-// ── Overlay dispatcher — called from animate() for modes 2-7 ────────────────
+// ── Overlay dispatcher — called from animate() for modes 2-9 ────────────────
 function _updateOverlay2D(freqData, tonicHz, gainMult, linThreshold, now) {
     const layoutMode = params.layoutMode
     const persistMode = params.persistMode
@@ -1719,6 +1857,8 @@ function _updateOverlay2D(freqData, tonicHz, gainMult, linThreshold, now) {
         case 5: _render2DVectorInterval(components, w, h, blendMode, persistMode, time); break
         case 6: _render2DHarmonicGravity(components, w, h, blendMode, persistMode, time); break
         case 7: _render2DPhaseOrbit(components, w, h, blendMode, persistMode, time); break
+        case 8: _render2DAmpStereo(freqData, gainMult, linThreshold, w, h, blendMode); break
+        case 9: _render2DAmpStereoComponents(freqData, gainMult, linThreshold, w, h, blendMode); break
     }
 }
 
@@ -1809,7 +1949,8 @@ function animate() {
     const linThreshold = Math.pow(10, params.amplitudeThreshold / 20)  // dBFS → linear
     // isPlaying is the module-level let — tracks actual play/pause state via button + 'ended'
     const layoutMode = params.layoutMode
-    const useOverlay = layoutMode >= 2  // Modes 2-7 rendered on the 2-D canvas
+    // Modes 2-9 use the 2-D overlay canvas.
+    const useOverlay = layoutMode >= 2
 
     // Show/hide the 2-D overlay canvas based on layout mode
     overlayCanvas.style.display = useOverlay ? 'block' : 'none'

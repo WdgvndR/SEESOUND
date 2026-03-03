@@ -315,7 +315,7 @@ export default function App() {
 
     useEffect(() => {
         const layoutMode = params.layoutMode ?? 0
-        const need3d = layoutMode >= 3
+        const need3d = layoutMode >= 3 && layoutMode !== 9 && layoutMode !== 10
 
         if (need3d !== is3dRef.current) {
             // Mode boundary crossed — destroy old engine, build new
@@ -347,7 +347,7 @@ export default function App() {
     useEffect(() => {
         if (!engineRef.current) {
             const layoutMode = params.layoutMode ?? 0
-            if (layoutMode >= 3 && threeContainerRef.current) {
+            if (layoutMode >= 3 && layoutMode !== 9 && layoutMode !== 10 && threeContainerRef.current) {
                 is3dRef.current = true
                 engineRef.current = new ThreeEngine(threeContainerRef.current)
                 engineRef.current.onCameraChange = (az, el, dist) => handleCameraParamsRef.current?.(az, el, dist)
@@ -380,7 +380,22 @@ export default function App() {
         window.addEventListener('resize', onResize)
         return () => window.removeEventListener('resize', onResize)
     }, [])
-
+    // ── Re-subscribe to the active job when the WebSocket reconnects ——————
+    // Without this, a reconnect after a drop leaves the new connection with no
+    // frame stream for the in-progress job.
+    const prevWsStatusRef = useRef(status)
+    useEffect(() => {
+        const prev = prevWsStatusRef.current
+        prevWsStatusRef.current = status
+        if (status === 'open' && prev !== 'open') {
+            const jId = jobIdRef.current
+            const jStatus = jobStatusRef.current
+            if (jId && (jStatus === 'running' || jStatus === 'done')) {
+                console.log('[SEESOUND] WS reconnected — re-subscribing to job', jId)
+                sendMessage({ type: 'subscribe', payload: { job_id: jId } })
+            }
+        }
+    }, [status, sendMessage])
     // ── Control messages (job_started, analysis_done, error …) ────────────
     // frames never appear in `messages` (filtered by useWebSocket), so this
     // array stays tiny and we can process it simply.
@@ -603,7 +618,7 @@ export default function App() {
         }
 
         // Use the correct canvas based on layout mode
-        const canvas = paramsRef.current.layoutMode >= 3
+        const canvas = paramsRef.current.layoutMode >= 3 && paramsRef.current.layoutMode !== 9 && paramsRef.current.layoutMode !== 10
             ? threeContainerRef.current?.querySelector('canvas')
             : canvasRef.current
         if (!canvas) return
@@ -734,7 +749,7 @@ export default function App() {
     const handleSave = useCallback(() => {
         const stem = audioFile ? audioFile.name.replace(/\.[^.]+$/, '') : 'seesound'
         let url
-        if (params.layoutMode >= 3) {
+        if (params.layoutMode >= 3 && params.layoutMode !== 9 && params.layoutMode !== 10) {
             // 3D mode: capture from ThreeEngine's WebGL canvas
             const el = threeContainerRef.current?.querySelector('canvas')
             url = el ? el.toDataURL('image/png') : null
@@ -800,12 +815,12 @@ export default function App() {
                     <canvas ref={canvasRef} className="render-canvas"
                         style={{
                             width: canvasW + 'px', height: canvasH + 'px',
-                            display: params.layoutMode >= 3 ? 'none' : 'block',
+                            display: params.layoutMode >= 3 && params.layoutMode !== 9 && params.layoutMode !== 10 ? 'none' : 'block',
                         }} />
                     <div ref={threeContainerRef} className="three-container"
                         style={{
                             width: canvasW + 'px', height: canvasH + 'px',
-                            display: params.layoutMode >= 3 ? 'block' : 'none',
+                            display: params.layoutMode >= 3 && params.layoutMode !== 9 && params.layoutMode !== 10 ? 'block' : 'none',
                         }} />
                 </div>
 

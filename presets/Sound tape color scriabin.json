@@ -1,43 +1,78 @@
 {
   "name": "Sound tape color scriabin",
   "params": {
+    "layoutMode": 0,
+    "persistMode": 1,
+    "blendMode": "source-over",
     "inputGain": 3,
-    "amplitudeThreshold": -85,
+    "amplitudeThreshold": -96,
     "perceptualLoudness": 60,
     "attackSensitivity": 80,
     "releaseDecay": 2,
-    "defaultParticleSize": 1,
+    "defaultParticleSize": 1.5,
     "freqDepthEffect": 100,
     "magnitudeSizeRatio": 0,
-    "amplitudeSizeStrength": 0,
-    "pitchSizeInversion": 0,
+    "amplitudeSizeStrength": 4,
     "sizeExponent": 4,
     "saliencyWeight": 100,
-    "harmonicRoughness": 100,
-    "edgeSoftness": 100,
     "shapeComplexity": 64,
+    "harmonicRoughness": 100,
+    "edgeSoftness": 0,
     "saturationFloor": 20,
-    "dissonanceDesat": 0,
-    "brightnessScaling": 0,
-    "blendMode": "screen",
-    "layoutMode": 1,
-    "persistMode": 1,
-    "octaveScaling": 50,
-    "zDepth": 40,
-    "harmonicClarity": 70,
+    "dissonanceDesat": 50,
+    "brightnessScaling": 50,
     "atmosphericPressure": 30,
     "lfWash": 40,
     "entropy": 20,
-    "kineticPendulum": 50,
-    "acousticFriction": 40,
-    "magneticOrientation": 50,
     "fluidDynamics": 30,
     "phaseInterference": 25,
+    "linearShowGrid": 0,
+    "linearTrailFade": 0.05,
+    "linearParticleMode": 0,
+    "lsAngleSpread": 18,
+    "lsGrowthSpeed": 0.09,
+    "lsLineWidth": 2.2,
+    "lsMaxBranches": 300,
+    "chromaticGravity": 0,
+    "magneticOrientation": 0,
+    "circRadiusScale": 1,
+    "circFreqMapping": 0,
+    "circChromaticGrav": 50,
+    "circMagOrientation": 50,
+    "circInterInstr": 50,
+    "threedParticleSize": 0.024,
+    "threedSpreadMul": 1,
+    "threedBloom": 0.4,
+    "threedAfterimage": 0.82,
+    "threedFogDensity": 0.018,
+    "threedFreqDepthBias": 3.5,
+    "cameraMode": 1,
+    "cameraFov": 75,
+    "cameraDistance": 40,
+    "cameraAzimuth": 0,
+    "cameraElevation": 5,
+    "cameraSpeed": 1,
+    "cameraOrbit": 0.5,
+    "lin3dHistoryDepth": 80,
+    "lin3dZStep": 0.7,
+    "spiralTurns": 2,
+    "spiralRadius": 3,
+    "spiralPitch": 1.2,
+    "spiralHistoryDepth": 80,
+    "ls3dAngleSpread": 18,
+    "ls3dGrowthSpeed": 0.09,
+    "ls3dLineWidth": 2.2,
+    "ls3dElevation": 25,
+    "ls3dRotation": 0,
+    "kineticPendulum": 50,
+    "acousticFriction": 40,
+    "zDepth": 40,
+    "harmonicClarity": 70,
     "fieldRendering": 50,
-    "chromaticGravity": 50,
     "depthDisplacement": 30,
     "sourceSeparation": 50,
-    "interInstrumental": 50,
+    "pitchSizeInversion": 0,
+    "octaveScaling": 50,
     "noteColors": {
       "C": [
         255,
@@ -101,611 +136,11 @@
       ]
     },
     "colorInputMode": "rgb",
-    "freqColorTable": {
-      "C0": [
-        26,
-        0,
-        0
-      ],
-      "C#0": [
-        14,
-        0,
-        26
-      ],
-      "D0": [
-        25,
-        26,
-        0
-      ],
-      "D#0": [
-        18,
-        7,
-        14
-      ],
-      "E0": [
-        0,
-        20,
-        26
-      ],
-      "F0": [
-        26,
-        0,
-        8
-      ],
-      "F#0": [
-        0,
-        3,
-        25
-      ],
-      "G0": [
-        26,
-        13,
-        0
-      ],
-      "G#0": [
-        13,
-        1,
-        25
-      ],
-      "A0": [
-        5,
-        20,
-        5
-      ],
-      "A#0": [
-        16,
-        9,
-        11
-      ],
-      "B0": [
-        0,
-        13,
-        26
-      ],
-      "C1": [
-        76,
-        0,
-        0
-      ],
-      "C#1": [
-        43,
-        0,
-        76
-      ],
-      "D1": [
-        76,
-        76,
-        0
-      ],
-      "D#1": [
-        55,
-        21,
-        42
-      ],
-      "E1": [
-        0,
-        60,
-        76
-      ],
-      "F1": [
-        76,
-        0,
-        23
-      ],
-      "F#1": [
-        1,
-        8,
-        76
-      ],
-      "G1": [
-        76,
-        38,
-        0
-      ],
-      "G#1": [
-        40,
-        2,
-        75
-      ],
-      "A1": [
-        16,
-        61,
-        15
-      ],
-      "A#1": [
-        49,
-        28,
-        34
-      ],
-      "B1": [
-        0,
-        40,
-        76
-      ],
-      "C2": [
-        127,
-        0,
-        0
-      ],
-      "C#2": [
-        71,
-        0,
-        127
-      ],
-      "D2": [
-        127,
-        127,
-        0
-      ],
-      "D#2": [
-        92,
-        35,
-        70
-      ],
-      "E2": [
-        0,
-        100,
-        127
-      ],
-      "F2": [
-        127,
-        0,
-        39
-      ],
-      "F#2": [
-        1,
-        13,
-        127
-      ],
-      "G2": [
-        127,
-        63,
-        0
-      ],
-      "G#2": [
-        66,
-        3,
-        125
-      ],
-      "A2": [
-        27,
-        102,
-        25
-      ],
-      "A#2": [
-        81,
-        46,
-        57
-      ],
-      "B2": [
-        0,
-        67,
-        127
-      ],
-      "C3": [
-        178,
-        0,
-        0
-      ],
-      "C#3": [
-        100,
-        0,
-        178
-      ],
-      "D3": [
-        178,
-        178,
-        0
-      ],
-      "D#3": [
-        129,
-        49,
-        98
-      ],
-      "E3": [
-        0,
-        140,
-        178
-      ],
-      "F3": [
-        178,
-        0,
-        55
-      ],
-      "F#3": [
-        1,
-        18,
-        177
-      ],
-      "G3": [
-        178,
-        89,
-        0
-      ],
-      "G#3": [
-        92,
-        4,
-        175
-      ],
-      "A3": [
-        38,
-        143,
-        36
-      ],
-      "A#3": [
-        114,
-        65,
-        80
-      ],
-      "B3": [
-        0,
-        93,
-        178
-      ],
-      "C4": [
-        229,
-        0,
-        0
-      ],
-      "C#4": [
-        129,
-        0,
-        229
-      ],
-      "D4": [
-        229,
-        229,
-        0
-      ],
-      "D#4": [
-        166,
-        63,
-        126
-      ],
-      "E4": [
-        0,
-        180,
-        229
-      ],
-      "F4": [
-        229,
-        0,
-        70
-      ],
-      "F#4": [
-        2,
-        23,
-        228
-      ],
-      "G4": [
-        229,
-        114,
-        0
-      ],
-      "G#4": [
-        119,
-        5,
-        225
-      ],
-      "A4": [
-        49,
-        184,
-        46
-      ],
-      "A#4": [
-        147,
-        83,
-        103
-      ],
-      "B4": [
-        0,
-        120,
-        229
-      ],
-      "C5": [
-        255,
-        26,
-        26
-      ],
-      "C#5": [
-        154,
-        26,
-        255
-      ],
-      "D5": [
-        255,
-        255,
-        26
-      ],
-      "D#5": [
-        192,
-        89,
-        152
-      ],
-      "E5": [
-        26,
-        205,
-        255
-      ],
-      "F5": [
-        255,
-        26,
-        96
-      ],
-      "F#5": [
-        27,
-        49,
-        253
-      ],
-      "G5": [
-        255,
-        139,
-        26
-      ],
-      "G#5": [
-        144,
-        30,
-        250
-      ],
-      "A5": [
-        74,
-        209,
-        71
-      ],
-      "A#5": [
-        172,
-        108,
-        129
-      ],
-      "B5": [
-        26,
-        145,
-        255
-      ],
-      "C6": [
-        255,
-        76,
-        76
-      ],
-      "C#6": [
-        177,
-        76,
-        255
-      ],
-      "D6": [
-        255,
-        255,
-        76
-      ],
-      "D#6": [
-        206,
-        126,
-        175
-      ],
-      "E6": [
-        76,
-        216,
-        255
-      ],
-      "F6": [
-        255,
-        76,
-        131
-      ],
-      "F#6": [
-        78,
-        94,
-        254
-      ],
-      "G6": [
-        255,
-        165,
-        76
-      ],
-      "G#6": [
-        169,
-        80,
-        251
-      ],
-      "A6": [
-        114,
-        219,
-        112
-      ],
-      "A#6": [
-        190,
-        141,
-        157
-      ],
-      "B6": [
-        76,
-        170,
-        255
-      ],
-      "C7": [
-        255,
-        128,
-        128
-      ],
-      "C#7": [
-        199,
-        128,
-        255
-      ],
-      "D7": [
-        255,
-        255,
-        128
-      ],
-      "D#7": [
-        220,
-        163,
-        198
-      ],
-      "E7": [
-        128,
-        227,
-        255
-      ],
-      "F7": [
-        255,
-        128,
-        166
-      ],
-      "F#7": [
-        128,
-        140,
-        254
-      ],
-      "G7": [
-        255,
-        191,
-        128
-      ],
-      "G#7": [
-        194,
-        130,
-        252
-      ],
-      "A7": [
-        155,
-        230,
-        153
-      ],
-      "A#7": [
-        209,
-        174,
-        185
-      ],
-      "B7": [
-        128,
-        194,
-        255
-      ],
-      "C8": [
-        255,
-        178,
-        178
-      ],
-      "C#8": [
-        221,
-        178,
-        255
-      ],
-      "D8": [
-        255,
-        255,
-        178
-      ],
-      "D#8": [
-        234,
-        200,
-        221
-      ],
-      "E8": [
-        178,
-        238,
-        255
-      ],
-      "F8": [
-        255,
-        178,
-        202
-      ],
-      "F#8": [
-        179,
-        186,
-        254
-      ],
-      "G8": [
-        255,
-        216,
-        178
-      ],
-      "G#8": [
-        218,
-        180,
-        253
-      ],
-      "A8": [
-        195,
-        240,
-        194
-      ],
-      "A#8": [
-        227,
-        206,
-        213
-      ],
-      "B8": [
-        178,
-        218,
-        255
-      ],
-      "C9": [
-        255,
-        229,
-        229
-      ],
-      "C#9": [
-        244,
-        229,
-        255
-      ],
-      "D9": [
-        255,
-        255,
-        229
-      ],
-      "D#9": [
-        248,
-        237,
-        244
-      ],
-      "E9": [
-        229,
-        249,
-        255
-      ],
-      "F9": [
-        255,
-        229,
-        237
-      ],
-      "F#9": [
-        230,
-        232,
-        255
-      ],
-      "G9": [
-        255,
-        242,
-        229
-      ],
-      "G#9": [
-        243,
-        230,
-        254
-      ],
-      "A9": [
-        235,
-        250,
-        235
-      ],
-      "A#9": [
-        246,
-        239,
-        241
-      ],
-      "B9": [
-        229,
-        243,
-        255
-      ]
-    },
-    "lightnessMin": 0.05,
-    "lightnessMax": 0.95
+    "freqColorTable": {},
+    "lightnessMin": 0.2,
+    "lightnessMax": 0.85
   },
+  "disabledKeys": [],
   "mappingGroups": [
     {
       "id": "g_620329",
