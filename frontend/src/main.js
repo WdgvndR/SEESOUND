@@ -298,7 +298,7 @@ class AudioEngine {
             this.ctx = new (window.AudioContext || window.webkitAudioContext)()
             this.analyser = this.ctx.createAnalyser()
             this.analyser.fftSize = this.FFT_SIZE
-            this.analyser.smoothingTimeConstant = 0.80   // 0 = no smoothing, 1 = maximum
+            this.analyser.smoothingTimeConstant = 0.00   // 0 = no smoothing, 1 = maximum
             this.analyser.connect(this.ctx.destination)
         }
 

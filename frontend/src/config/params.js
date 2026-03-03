@@ -193,7 +193,7 @@ export const PARAMS = [
     // ─── Advanced Behaviors ──────────────────────────────────────────────────
     { key: 'kineticPendulum', group: 'advanced', label: 'Kinetic Pendulum', min: 0, max: 100, step: 1, default: 50, unit: '%', desc: 'More render slots per frame at high BPM.', canDisable: true },
     { key: 'acousticFriction', group: 'advanced', label: 'Acoustic Friction', min: 0, max: 100, step: 1, default: 40, unit: '%', desc: 'Spectral clarity reduces polygon vertex count.', canDisable: true },
-    { key: 'zDepth', group: 'advanced', label: 'Z-Axis Depth', min: 0, max: 100, step: 1, default: 40, unit: '%', desc: 'Older 2D marks shrink and fade (depth illusion).', canDisable: true },
+    { key: 'zDepth', group: 'advanced', label: 'Z-Axis Depth', min: 0, max: 100, step: 1, default: 0, unit: '%', desc: 'Older 2D marks shrink and fade (depth illusion).', canDisable: true },
     { key: 'harmonicClarity', group: 'advanced', label: 'Harmonic Clarity', min: 0, max: 100, step: 1, default: 70, unit: '%', desc: 'Clarity score drives blur and vertex count.', canDisable: true },
     { key: 'fieldRendering', group: 'advanced', label: 'Field Rendering', min: 0, max: 100, step: 1, default: 50, unit: '%', desc: 'Dissonant components scattered from computed position.', canDisable: true },
     { key: 'depthDisplacement', group: 'advanced', label: 'Depth Displacement', min: 0, max: 100, step: 1, default: 30, unit: '%', desc: 'Extra size for bass on heavy kick hits.', canDisable: true },
@@ -269,9 +269,13 @@ export async function listPresets() {
 }
 
 export async function savePreset(name, params, disabledKeys = [], mappingGroups = [], canvasW, canvasH) {
+    // Strip color keys — those are saved separately via saveColorPreset
+    const filteredParams = Object.fromEntries(
+        Object.entries(params).filter(([k]) => !COLOR_KEYS.includes(k))
+    )
     const body = {
         name,
-        params,
+        params: filteredParams,
         disabledKeys: [...(disabledKeys instanceof Set ? disabledKeys : disabledKeys)],
         mappingGroups,
     }
@@ -300,6 +304,65 @@ export async function deletePreset(name) {
         return r.json()
     } catch { return {} }
 }
+
+// ── Color-preset API ──────────────────────────────────────────────────────────
+// Color presets save/restore only the colour-related keys, leaving all
+// geometry, physics, and layout parameters untouched.
+
+export const COLOR_KEYS = [
+    'noteColors',
+    'colorInputMode',
+    'freqColorTable',
+    'lightnessMin',
+    'lightnessMax',
+    'saturationFloor',
+    'dissonanceDesat',
+    'brightnessScaling',
+    'blendMode',
+]
+
+export async function listColorPresets() {
+    try {
+        const r = await fetch(`${API}/api/color-presets`)
+        if (!r.ok) return []
+        const data = await r.json()
+        return data.names || []
+    } catch { return [] }
+}
+
+export async function saveColorPreset(name, params) {
+    const colors = {}
+    for (const k of COLOR_KEYS) if (k in params) colors[k] = params[k]
+    try {
+        const r = await fetch(`${API}/api/color-presets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, colors }),
+        })
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+    } catch (e) {
+        console.error('[ColorPreset] save failed:', e)
+        throw e
+    }
+}
+
+export async function loadColorPreset(name) {
+    try {
+        const r = await fetch(`${API}/api/color-presets/${encodeURIComponent(name)}`)
+        if (!r.ok) return null
+        return await r.json()
+    } catch { return null }
+}
+
+export async function deleteColorPreset(name) {
+    try {
+        const r = await fetch(`${API}/api/color-presets/${encodeURIComponent(name)}`, { method: 'DELETE' })
+        return r.json()
+    } catch { return {} }
+}
+
+
 
 export function getDefaultParams() {
     const userDefaults = loadUserDefaults();

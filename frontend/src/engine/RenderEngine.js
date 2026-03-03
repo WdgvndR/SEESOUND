@@ -398,8 +398,8 @@ export class RenderEngine {
             // ── Node-graph evaluation (modifier layer) ────────────────────────
             if (this._graphEval && this._graphEval.hasGraph) {
                 var _fNorm = clamp(freqLogNorm, 0, 1)
-                var _pd = { amplitude: ampScaled, freqNorm: _fNorm, pan: c.pan, age: compAge, clarity: clarityVal, dissonance: dissonance }
-                var _fd = { rms: rmsNorm, bpm: bpm, bassEnergy: bassEnergy }
+                var _pd = { amplitude: ampScaled, freqNorm: _fNorm, pan: c.pan, age: compAge, clarity: clarityVal, dissonance: dissonance, timbre: c.timbre ?? clarityVal, percussive: c.percussive ?? 0 }
+                var _fd = { rms: rmsNorm, bpm: bpm, bassEnergy: bassEnergy, components: sortedComps }
                 var _mods = this._graphEval.evaluate(_pd, _fd)
                 var _applyMod = function (v, m, lo, hi) {
                     if (!m) return v
@@ -415,6 +415,28 @@ export class RenderEngine {
                 if (_mods.alpha_mult) alpha = clamp(alpha * _mods.alpha_mult.value, 0, 1)
                 if (_mods.cx_offset) cx += _mods.cx_offset.value * w * 0.5
                 if (_mods.cy_offset) cy += _mods.cy_offset.value * h * 0.5
+                // Color override: replace hue/sat/lit with the chosen color (last active rule wins)
+                if (_mods.color_override && _mods.color_override.colorHex) {
+                    var _hex = _mods.color_override.colorHex
+                    var _or = parseInt(_hex.slice(1, 3), 16)
+                    var _og = parseInt(_hex.slice(3, 5), 16)
+                    var _ob = parseInt(_hex.slice(5, 7), 16)
+                    var _rno = _or / 255, _gno = _og / 255, _bno = _ob / 255
+                    var _cmx = Math.max(_rno, _gno, _bno), _cmn = Math.min(_rno, _gno, _bno)
+                    var _dlt = _cmx - _cmn
+                    var _oHue = 0
+                    if (_dlt > 0.001) {
+                        if (_cmx === _rno) _oHue = (60 * ((_gno - _bno) / _dlt) % 360 + 360) % 360
+                        else if (_cmx === _gno) _oHue = (60 * ((_bno - _rno) / _dlt + 2) + 360) % 360
+                        else _oHue = (60 * ((_rno - _gno) / _dlt + 4) + 360) % 360
+                    }
+                    var _oSat = _dlt === 0 ? 0 : _dlt / (1 - Math.abs(_cmx + _cmn - 1))
+                    var _oLit = (_cmx + _cmn) / 2
+                    var _str = clamp(_mods.color_override.value, 0, 1)
+                    hue = lerp(hue, _oHue, _str)
+                    sat = lerp(sat, clamp(_oSat, 0, 1), _str)
+                    lit = lerp(lit, clamp(_oLit, 0.05, 0.95), _str)
+                }
                 // Recompute color with potentially-updated hue / sat / lit / alpha
                 color = hsla(hue, clamp(sat, 0, 1), clamp(lit, 0.05, 0.95), alpha)
             }
@@ -587,7 +609,40 @@ export class RenderEngine {
             cx += (rng() - 0.5) * dissonance2 * (params.fieldRendering / 100) * 20
             cy += (rng() - 0.5) * dissonance2 * (params.fieldRendering / 100) * 20
 
+            // ── Node-graph / custom-mapping evaluation ──────────────────────
             var color = hsla(hue, clamp(sat, 0, 1), clamp(lit, 0.05, 0.95), alpha)
+            if (this._graphEval && this._graphEval.hasGraph) {
+                var _fNorm2 = clamp(Math.log2(Math.max(c.freq, 16) / 16) / Math.log2(1000), 0, 1)
+                var _pd2 = { amplitude: ampScaled, freqNorm: _fNorm2, pan: c.pan ?? 0, age: 0, clarity: clarityVal, dissonance: dissonance2, timbre: c.timbre ?? clarityVal, percussive: c.percussive ?? 0 }
+                var _fd2 = { rms: rmsNorm, bpm: bpm, bassEnergy: bassEnergy, components: sortedComps }
+                var _mods2 = this._graphEval.evaluate(_pd2, _fd2)
+                if (_mods2.radius_mult) baseRadius = clamp(baseRadius * _mods2.radius_mult.value, 0.5, Math.min(hw, hh) * 0.3)
+                if (_mods2.hue_add) hue = ((hue + _mods2.hue_add.value * 360) + 720) % 360
+                if (_mods2.saturation) sat = clamp(_mods2.saturation.mode === 'set' ? _mods2.saturation.value : sat * _mods2.saturation.value, 0, 1)
+                if (_mods2.lightness) lit = clamp(_mods2.lightness.mode === 'set' ? _mods2.lightness.value : lit * _mods2.lightness.value, 0.05, 0.95)
+                if (_mods2.alpha_mult) alpha = clamp(alpha * _mods2.alpha_mult.value, 0, 1)
+                if (_mods2.color_override && _mods2.color_override.colorHex) {
+                    var _hex2 = _mods2.color_override.colorHex
+                    var _or2 = parseInt(_hex2.slice(1, 3), 16)
+                    var _og2 = parseInt(_hex2.slice(3, 5), 16)
+                    var _ob2 = parseInt(_hex2.slice(5, 7), 16)
+                    var _rno2 = _or2 / 255, _gno2 = _og2 / 255, _bno2 = _ob2 / 255
+                    var _cmx2 = Math.max(_rno2, _gno2, _bno2), _cmn2 = Math.min(_rno2, _gno2, _bno2), _dlt2 = _cmx2 - _cmn2
+                    var _oHue2 = 0
+                    if (_dlt2 > 0.001) {
+                        if (_cmx2 === _rno2) _oHue2 = (60 * ((_gno2 - _bno2) / _dlt2) % 360 + 360) % 360
+                        else if (_cmx2 === _gno2) _oHue2 = (60 * ((_bno2 - _rno2) / _dlt2 + 2) + 360) % 360
+                        else _oHue2 = (60 * ((_rno2 - _gno2) / _dlt2 + 4) + 360) % 360
+                    }
+                    var _oSat2 = _dlt2 === 0 ? 0 : _dlt2 / (1 - Math.abs(_cmx2 + _cmn2 - 1))
+                    var _oLit2 = (_cmx2 + _cmn2) / 2
+                    var _str2 = clamp(_mods2.color_override.value, 0, 1)
+                    hue = lerp(hue, _oHue2, _str2)
+                    sat = lerp(sat, clamp(_oSat2, 0, 1), _str2)
+                    lit = lerp(lit, clamp(_oLit2, 0.05, 0.95), _str2)
+                }
+                color = hsla(hue, clamp(sat, 0, 1), clamp(lit, 0.05, 0.95), alpha)
+            }
             ctx.save()
             this._drawShape(ctx, cx, cy, baseRadius, vertices, edgeSoftness, roughness, color, rng)
             ctx.restore()

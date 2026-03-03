@@ -189,8 +189,7 @@ export default function App() {
 
     const handlePresetLoad = useCallback(({ params: presetParams, disabledKeys: presetDisabledKeys, mappingGroups: presetMappingGroups } = {}) => {
         if (!presetParams) return
-        // Merge loaded preset with current defaults so any new fields
-        // (e.g. freqColorTable, lightnessMin from old presets) are filled in.
+        // Merge loaded preset with current defaults so any new fields are filled in.
         const merged = { ...getDefaultParams(), ...presetParams }
         setParams(merged)
         paramsRef.current = merged
@@ -206,6 +205,17 @@ export default function App() {
             setCustomMappingGroups(presetMappingGroups)
             saveMappings(presetMappingGroups)
         }
+        if (status === 'open') sendMessage({ type: 'params', payload: merged })
+        renderAtTime(audioRef.current?.currentTime ?? 0)
+    }, [status, sendMessage, renderAtTime])
+
+    // Applies a color-only preset — merges colour keys into current params
+    // without touching geometry, physics, or layout settings.
+    const handleColorPresetLoad = useCallback((colorParams) => {
+        if (!colorParams) return
+        const merged = { ...paramsRef.current, ...colorParams }
+        setParams(merged)
+        paramsRef.current = merged
         if (status === 'open') sendMessage({ type: 'params', payload: merged })
         renderAtTime(audioRef.current?.currentTime ?? 0)
     }, [status, sendMessage, renderAtTime])
@@ -365,15 +375,76 @@ export default function App() {
         }
     }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── Compile & wire graph evaluator whenever nodes/edges change ────────
+    // ── Compile & wire graph evaluator whenever nodes/edges OR custom mapping groups change ──
+    // Maps CustomMappingEditor rule field names to the GraphEvaluator format.
+    const CM_INPUT_MAP = {
+        amplitude: { source: 'amplitude' },
+        bass: { source: 'freqband', sourceParams: { freqLo: 80, freqHi: 300 } },
+        mids: { source: 'freqband', sourceParams: { freqLo: 250, freqHi: 2500 } },
+        highs: { source: 'freqband', sourceParams: { freqLo: 4000, freqHi: 20000 } },
+        onset_strength: { source: 'inst_percussive' },
+        spectral_centroid: { source: 'frequency' },
+        spectral_flatness: { source: 'clarity' },
+        stereo_pan: { source: 'pan' },
+        dissonance: { source: 'dissonance' },
+        harmonic_ratio: { source: 'clarity' },
+        note_count: { source: 'rms' },
+        time_progress: { source: 'age' },
+    }
+    const CM_MATH_MAP = { pow: 'power' }  // only the renames; all others are identical
+
+    const adaptCMRules = (groups) => {
+        const rules = []
+        for (const group of groups || []) {
+            // Rules in subgroups
+            for (const sg of group.subgroups || []) {
+                for (const r of sg.rules || []) {
+                    const inputDef = CM_INPUT_MAP[r.input] || { source: r.input }
+                    const op = CM_MATH_MAP[r.math] || r.math || 'passthrough'
+                    const adapted = {
+                        ...inputDef,
+                        op,
+                        amount: r.mathArgs?.[0] ?? 1,
+                        mathArgs: r.mathArgs,
+                        target: r.output,
+                        mode: 'set',
+                        enabled: true,
+                    }
+                    if (r.colorHex) adapted.colorHex = r.colorHex
+                    rules.push(adapted)
+                }
+            }
+            // Rules directly on the group (legacy / flat)
+            for (const r of group.rules || []) {
+                const inputDef = CM_INPUT_MAP[r.input] || { source: r.input }
+                const op = CM_MATH_MAP[r.math] || r.math || 'passthrough'
+                const adapted = {
+                    ...inputDef,
+                    op,
+                    amount: r.mathArgs?.[0] ?? 1,
+                    mathArgs: r.mathArgs,
+                    target: r.output,
+                    mode: 'set',
+                    enabled: true,
+                }
+                if (r.colorHex) adapted.colorHex = r.colorHex
+                rules.push(adapted)
+            }
+        }
+        return rules
+    }
+
     useEffect(() => {
         if (!graphEvalRef.current) {
             graphEvalRef.current = new GraphEvaluator()
         }
         const ge = graphEvalRef.current
-        ge.compile(nodes, edges)
+        // Compile custom mapping groups (the simple rule editor) into the evaluator.
+        // Node-graph rules (nodes/edges) are stacked on top when present.
+        const cmRules = adaptCMRules(customMappingGroups)
+        ge.compile(cmRules)
         engineRef.current?.setGraphEvaluator(ge)
-    }, [nodes, edges])
+    }, [nodes, edges, customMappingGroups])  // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         const onResize = () => engineRef.current?.resize()
@@ -785,6 +856,7 @@ export default function App() {
                 disabledKeys={disabledKeys}
                 onToggleDisabled={handleToggleDisabled}
                 onPresetLoad={handlePresetLoad}
+                onColorPresetLoad={handleColorPresetLoad}
                 activeTab={activePanel}
                 onTabChange={setActivePanel}
                 mappingGroups={customMappingGroups}

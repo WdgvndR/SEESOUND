@@ -1,19 +1,64 @@
 import { useState } from 'react'
 
-// ── Audio input signals ────────────────────────────────────────────────────
-const INPUT_OPTIONS = [
-    { value: 'amplitude', label: 'Amplitude (RMS)' },
-    { value: 'bass', label: 'Bass Energy' },
-    { value: 'mids', label: 'Mid Energy' },
-    { value: 'highs', label: 'High Energy' },
-    { value: 'onset_strength', label: 'Onset Strength' },
-    { value: 'spectral_centroid', label: 'Spectral Brightness' },
-    { value: 'spectral_flatness', label: 'Spectral Flatness' },
-    { value: 'stereo_pan', label: 'Stereo Pan' },
-    { value: 'dissonance', label: 'Dissonance' },
-    { value: 'harmonic_ratio', label: 'Harmonic Ratio' },
-    { value: 'note_count', label: 'Note Count' },
-    { value: 'time_progress', label: 'Time Progress (0–1)' },
+// ── Audio input signals — grouped by instrument category ──────────────────
+const INPUT_GROUPS = [
+    {
+        group: 'Broad Signal',
+        inputs: [
+            { value: 'amplitude', label: 'Amplitude (RMS)' },
+            { value: 'bass', label: 'Bass Energy (broad)' },
+            { value: 'mids', label: 'Mid Energy (broad)' },
+            { value: 'highs', label: 'High Energy (broad)' },
+            { value: 'onset_strength', label: 'Onset Strength' },
+            { value: 'spectral_centroid', label: 'Spectral Brightness' },
+            { value: 'spectral_flatness', label: 'Spectral Flatness' },
+            { value: 'stereo_pan', label: 'Stereo Pan' },
+            { value: 'dissonance', label: 'Dissonance' },
+            { value: 'harmonic_ratio', label: 'Harmonic Ratio' },
+            { value: 'note_count', label: 'Note Count' },
+            { value: 'time_progress', label: 'Time Progress (0–1)' },
+        ],
+    },
+    {
+        group: 'Drums / Percussion',
+        inputs: [
+            { value: 'sub_amp', label: 'Sub Bass (20–60 Hz)' },
+            { value: 'kick_amp', label: 'Kick Drum (40–120 Hz)' },
+            { value: 'snare_body', label: 'Snare Body (150–350 Hz)' },
+            { value: 'snare_crack', label: 'Snare Crack (5–10 kHz)' },
+            { value: 'hi_hat', label: 'Hi-Hat (8–14 kHz)' },
+            { value: 'cymbal', label: 'Cymbal / Open HH (6–18 kHz)' },
+        ],
+    },
+    {
+        group: 'Bass / Guitar / Strings',
+        inputs: [
+            { value: 'bass_amp', label: 'Bass Guitar (80–300 Hz)' },
+            { value: 'low_guitar', label: 'Guitar Low (80–400 Hz)' },
+            { value: 'strings_range', label: 'Strings (200–4000 Hz)' },
+        ],
+    },
+    {
+        group: 'Voice / Winds / Brass',
+        inputs: [
+            { value: 'vocal_body', label: 'Vocal Body (200–1000 Hz)' },
+            { value: 'vocal_range', label: 'Vocal Range (200–3500 Hz)' },
+            { value: 'woodwind', label: 'Woodwind (250–3500 Hz)' },
+            { value: 'brass_range', label: 'Brass (100–2000 Hz)' },
+        ],
+    },
+    {
+        group: 'Keys / Full Range',
+        inputs: [
+            { value: 'piano_range', label: 'Piano (27–4186 Hz)' },
+            { value: 'low_mid', label: 'Low-Mid (250–800 Hz)' },
+            { value: 'mid_range', label: 'Mid-Range (800–2500 Hz)' },
+            { value: 'upper_mid', label: 'Upper-Mid (2–5 kHz)' },
+            { value: 'presence', label: 'Presence (3–8 kHz)' },
+            { value: 'treble', label: 'Treble (4–20 kHz)' },
+            { value: 'air', label: 'Air / Sheen (14–20 kHz)' },
+        ],
+    },
 ]
 
 // ── Math operations
@@ -38,6 +83,7 @@ const MATH_MAP = Object.fromEntries(MATH_OPTIONS.map(o => [o.value, o]))
 
 // ── Output parameters ─────────────────────────────────────────────────────
 const OUTPUT_OPTIONS = [
+    { group: 'Color Override', value: 'color_override', label: '⬛ Color Override', isColorRule: true },
     { group: 'Input Gain', value: 'inputGain', label: 'Input Gain' },
     { group: 'Input Gain', value: 'attackSensitivity', label: 'Attack Sensitivity' },
     { group: 'Input Gain', value: 'releaseDecay', label: 'Release / Decay' },
@@ -79,13 +125,14 @@ export const saveMappings = (g) => { try { localStorage.setItem(STORAGE_KEY, JSO
 let _id = 0
 const uid = () => `cm-${Date.now()}-${++_id}`
 
-export const makeRule = () => ({ id: uid(), input: 'amplitude', math: 'multiply', mathArgs: [1], output: 'defaultParticleSize' })
+export const makeRule = () => ({ id: uid(), input: 'amplitude', math: 'multiply', mathArgs: [1], output: 'defaultParticleSize', colorHex: '#ffffff' })
 export const makeSubgroup = (label = 'Subgroup 1') => ({ id: uid(), label, open: true, rules: [makeRule()] })
 export const makeGroup = (label = 'Group 1') => ({ id: uid(), label, open: true, subgroups: [makeSubgroup()] })
 
 // ── Rule row ──────────────────────────────────────────────────────────────
 function RuleRow({ rule, onChange, onDelete }) {
     const mathDef = MATH_MAP[rule.math] ?? MATH_OPTIONS[0]
+    const isColorOverride = rule.output === 'color_override'
     const set = (patch) => onChange({ ...rule, ...patch })
 
     const handleMathChange = (newMath) => {
@@ -99,40 +146,73 @@ function RuleRow({ rule, onChange, onDelete }) {
         set({ mathArgs: args })
     }
 
+    const handleOutputChange = (newOutput) => {
+        // When switching to color_override, default math to passthrough
+        if (newOutput === 'color_override') {
+            set({ output: newOutput, math: 'passthrough', mathArgs: [], colorHex: rule.colorHex || '#ffffff' })
+        } else {
+            set({ output: newOutput })
+        }
+    }
+
     return (
         <div className="cm-rule-row">
+            {/* Input signal — grouped by instrument category */}
             <select className="cm-select cm-select-input" value={rule.input}
                 onChange={e => set({ input: e.target.value })} title="Input signal">
-                {INPUT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {INPUT_GROUPS.map(grp => (
+                    <optgroup key={grp.group} label={grp.group}>
+                        {grp.inputs.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </optgroup>
+                ))}
             </select>
 
-            <select className="cm-select cm-select-math" value={rule.math}
-                onChange={e => handleMathChange(e.target.value)} title="Math operation">
-                {MATH_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            {/* Math operation + args — hidden when output is color_override */}
+            {!isColorOverride && (
+                <>
+                    <select className="cm-select cm-select-math" value={rule.math}
+                        onChange={e => handleMathChange(e.target.value)} title="Math operation">
+                        {MATH_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
 
-            {mathDef.args > 0 && (rule.mathArgs || []).slice(0, mathDef.args).map((val, i) => (
-                <span key={i} className="cm-math-arg-wrap" title={mathDef.argLabels?.[i] ?? ''}>
-                    <span className="cm-math-arg-label">{mathDef.argLabels?.[i] ?? `arg${i + 1}`}</span>
-                    <input type="number" className="cm-math-arg"
-                        value={val}
-                        step="any"
-                        onChange={e => handleArgChange(i, e.target.value)}
-                        onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) handleArgChange(i, n) }}
-                    />
-                </span>
-            ))}
+                    {mathDef.args > 0 && (rule.mathArgs || []).slice(0, mathDef.args).map((val, i) => (
+                        <span key={i} className="cm-math-arg-wrap" title={mathDef.argLabels?.[i] ?? ''}>
+                            <span className="cm-math-arg-label">{mathDef.argLabels?.[i] ?? `arg${i + 1}`}</span>
+                            <input type="number" className="cm-math-arg"
+                                value={val}
+                                step="any"
+                                onChange={e => handleArgChange(i, e.target.value)}
+                                onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) handleArgChange(i, n) }}
+                            />
+                        </span>
+                    ))}
+                </>
+            )}
 
             <span className="cm-arrow">→</span>
 
+            {/* Output parameter select */}
             <select className="cm-select cm-select-output" value={rule.output}
-                onChange={e => set({ output: e.target.value })} title="Output parameter">
+                onChange={e => handleOutputChange(e.target.value)} title="Output parameter">
                 {Object.entries(OUTPUT_GROUPS).map(([grpName, opts]) => (
                     <optgroup key={grpName} label={grpName}>
                         {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </optgroup>
                 ))}
             </select>
+
+            {/* Color picker — only shown for color_override output */}
+            {isColorOverride && (
+                <span className="cm-color-wrap" title="Override color">
+                    <input
+                        type="color"
+                        className="cm-color-picker"
+                        value={rule.colorHex || '#ffffff'}
+                        onChange={e => set({ colorHex: e.target.value })}
+                    />
+                    <span className="cm-color-swatch" style={{ background: rule.colorHex || '#ffffff' }} />
+                </span>
+            )}
 
             <button className="cm-del-btn" onClick={onDelete} title="Remove rule">✕</button>
         </div>

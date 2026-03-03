@@ -75,6 +75,8 @@ export const MATH_OPS = {
 }
 
 export const VISUAL_OUTPUTS = {
+    // ── COLOR OVERRIDE ────────────────────────────────────────────────────────
+    color_override: { label: 'Color Override', group: 'Color', desc: 'Replaces the particle colour with a custom-picked colour. The input signal acts as activation strength (0 = off, 1 = full override). Rules lower in the list take priority when both are active.' },
     // ── PARTICLE ──────────────────────────────────────────────────────────────
     quantity_mult: { label: 'Quantity x', group: 'Particle', desc: 'Multiplies the number of particles drawn this frame (>1 spawns extra copies; <1 culls some). Map a loud bass hit to burst out dense particle clouds.' },
     radius_mult: { label: 'Size x', group: 'Particle', desc: 'Multiplies the base particle radius. 1 = unchanged; 2 = double size; 0 = invisible.' },
@@ -107,7 +109,7 @@ export const VISUAL_OUTPUTS = {
 
 /** VISUAL_OUTPUTS grouped by category for optgroup rendering in the output select. */
 export const VISUAL_OUTPUT_GROUPS = (() => {
-    const order = ['Particle', 'Physics', 'Camera']
+    const order = ['Color', 'Particle', 'Physics', 'Camera']
     const map = {}
     for (const [key, def] of Object.entries(VISUAL_OUTPUTS)) {
         const g = def.group || 'Particle'
@@ -173,7 +175,7 @@ function _readInput(rule, particle, frame) {
     }
 }
 
-function _applyMath(op, v, amount) {
+function _applyMath(op, v, amount, mathArgs) {
     const a = amount ?? 1
     switch (op) {
         case 'multiply': return v * a
@@ -195,6 +197,16 @@ function _applyMath(op, v, amount) {
         case 'max_floor': return Math.max(v, a)
         case 'min_ceil': return Math.min(v, a)
         case 'scale': return v * a
+        // ── Extra ops used by CustomMappingEditor ────────────────────────────
+        case 'passthrough': return v
+        case 'sqrt': return Math.sqrt(Math.max(v, 0))
+        case 'threshold': return v >= a ? 1 : 0
+        case 'map_range': {
+            // mathArgs: [i0, i1, o0, o1]
+            const [i0 = 0, i1 = 1, o0 = 0, o1 = 1] = mathArgs || []
+            if (i1 === i0) return o0
+            return o0 + (v - i0) / (i1 - i0) * (o1 - o0)
+        }
         default: return v
     }
 }
@@ -215,7 +227,7 @@ export class GraphEvaluator {
     /**
      * Evaluate all rules for one particle.
      * @param {object} particle  { amplitude, freqNorm, pan, age, clarity, dissonance }
-     * @param {object} frame     { rms, bpm, bassEnergy }
+     * @param {object} frame     { rms, bpm, bassEnergy, components }
      * @returns {object}  { [target]: { value, mode } }
      */
     evaluate(particle, frame) {
@@ -223,8 +235,21 @@ export class GraphEvaluator {
         const results = {}
         for (const rule of this._rules) {
             const raw = _readInput(rule, particle, frame)
-            const processed = _applyMath(rule.op, raw, rule.amount)
-            results[rule.target] = { value: processed, mode: rule.mode || 'multiply' }
+            const processed = _applyMath(rule.op, raw, rule.amount, rule.mathArgs)
+
+            if (rule.target === 'color_override') {
+                // "Last active rule wins" — only overwrite when this rule is firing (> threshold).
+                // An inactive lower rule (value ≤ 0.05) must NOT shadow an active higher rule.
+                if (processed > 0.05) {
+                    results.color_override = {
+                        value: processed,
+                        mode: 'set',
+                        colorHex: rule.colorHex || '#ffffff',
+                    }
+                }
+            } else {
+                results[rule.target] = { value: processed, mode: rule.mode || 'multiply' }
+            }
         }
         return results
     }

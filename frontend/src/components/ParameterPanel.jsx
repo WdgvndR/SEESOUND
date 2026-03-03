@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
     PARAM_GROUPS, PARAMS, loadUserDefaults, saveUserDefault,
     listPresets, savePreset, loadPreset, deletePreset,
+    listColorPresets, saveColorPreset, loadColorPreset, deleteColorPreset,
 } from '../config/params.js'
 import ColorPaletteEditor, { DEFAULT_NOTE_COLORS } from './ColorPaletteEditor.jsx'
 import CustomMappingEditor from './CustomMappingEditor.jsx'
@@ -256,6 +257,136 @@ function Slider({ param, value, userDefault, isDisabled, onChange, onSaveDefault
     )
 }
 
+// ─── Color preset bar ────────────────────────────────────────────────────────────
+function ColorPresetBar({ currentValues, onColorPresetLoad }) {
+    const [presets, setPresets] = useState([])
+    const [selected, setSelected] = useState('')
+    const [saveName, setSaveName] = useState('')
+    const [busy, setBusy] = useState(false)
+    const [error, setError] = useState('')
+    const [armOverwrite, setArmOverwrite] = useState(false)
+    const armTimerRef = useRef(null)
+
+    const refresh = useCallback(async () => {
+        const names = await listColorPresets()
+        setPresets(names)
+    }, [])
+
+    useEffect(() => { refresh() }, [refresh])
+    useEffect(() => () => clearTimeout(armTimerRef.current), [])
+
+    const disarmOverwrite = () => {
+        setArmOverwrite(false)
+        clearTimeout(armTimerRef.current)
+    }
+
+    const handleSelectPreset = (e) => {
+        const name = e.target.value
+        setSelected(name)
+        if (name) setSaveName(name)
+    }
+
+    const handleLoad = async () => {
+        if (!selected) return
+        setBusy(true)
+        const data = await loadColorPreset(selected)
+        setBusy(false)
+        if (data?.colors) onColorPresetLoad(data.colors)
+    }
+
+    const handleSave = async () => {
+        const name = saveName.trim()
+        if (!name) return
+        const isOverwrite = presets.includes(name)
+        if (isOverwrite) {
+            if (!armOverwrite) {
+                setArmOverwrite(true)
+                clearTimeout(armTimerRef.current)
+                armTimerRef.current = setTimeout(disarmOverwrite, 3000)
+                return
+            }
+            disarmOverwrite()
+        }
+        setBusy(true)
+        setError('')
+        try {
+            await saveColorPreset(name, currentValues)
+            await refresh()
+            setSaveName(name)
+            setSelected(name)
+        } catch {
+            setError('Save failed — is the backend running?')
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    const handleDelete = async () => {
+        if (!selected) return
+        // eslint-disable-next-line no-restricted-globals
+        if (!confirm(`Delete color preset "${selected}"?`)) return
+        setBusy(true)
+        setError('')
+        await deleteColorPreset(selected)
+        await refresh()
+        setSelected('')
+        setSaveName('')
+        setBusy(false)
+    }
+
+    return (
+        <div className="preset-bar color-preset-bar">
+            <div className="preset-bar-section-label">Color Presets</div>
+            {error && <div className="preset-bar-error">{error}</div>}
+            <datalist id="color-preset-names-list">
+                {presets.map(n => <option key={n} value={n} />)}
+            </datalist>
+            <div className="preset-bar-row">
+                <select
+                    className="preset-select"
+                    value={selected}
+                    onChange={handleSelectPreset}
+                    disabled={busy}
+                >
+                    <option value="">— select —</option>
+                    {presets.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <button className="preset-btn" onClick={handleLoad} disabled={!selected || busy} title="Load color preset">Load</button>
+                <button className="preset-btn preset-btn-del" onClick={handleDelete} disabled={!selected || busy} title="Delete color preset">✕</button>
+            </div>
+            <div className="preset-bar-row">
+                <input
+                    className="preset-name-input"
+                    list="color-preset-names-list"
+                    type="text"
+                    placeholder="Color preset name…"
+                    value={saveName}
+                    onChange={e => { setSaveName(e.target.value); disarmOverwrite() }}
+                    onKeyDown={e => e.key === 'Enter' && handleSave()}
+                    disabled={busy}
+                />
+                <button
+                    className={`preset-btn preset-btn-save${armOverwrite
+                        ? ' preset-btn-overwrite-armed'
+                        : presets.includes(saveName.trim()) ? ' preset-btn-overwrite' : ''}`}
+                    onClick={handleSave}
+                    onBlur={disarmOverwrite}
+                    disabled={!saveName.trim() || busy}
+                    title={
+                        armOverwrite
+                            ? 'Click again to confirm overwrite'
+                            : presets.includes(saveName.trim())
+                                ? `Overwrite "${saveName.trim()}" — click once to arm`
+                                : 'Save as new color preset'
+                    }
+                >
+                    {armOverwrite ? '⚠ Confirm?' : presets.includes(saveName.trim()) ? '↺ Overwrite' : 'Save'}
+                </button>
+            </div>
+        </div>
+    )
+}
+
 // ─── Preset bar ──────────────────────────────────────────────────────────────────
 function PresetBar({ currentValues, disabledKeys, mappingGroups, onPresetLoad }) {
     const [presets, setPresets] = useState([])
@@ -433,7 +564,7 @@ export default function ParameterPanel({
     values, onChange, onReset, collapsed, onToggle,
     onColorChange, onColorModeChange,
     onCalculateAll, onTableEntryChange,
-    disabledKeys, onToggleDisabled, onPresetLoad,
+    disabledKeys, onToggleDisabled, onPresetLoad, onColorPresetLoad,
     activeTab, onTabChange,
     mappingGroups, onMappingGroupsChange,
 }) {
@@ -495,6 +626,10 @@ export default function ParameterPanel({
                                 startOpen={i < 3}
                             />
                         ))}
+                    <ColorPresetBar
+                        currentValues={values}
+                        onColorPresetLoad={onColorPresetLoad}
+                    />
                     <ColorPaletteEditor
                         noteColors={values.noteColors || DEFAULT_NOTE_COLORS}
                         colorInputMode={values.colorInputMode || 'rgb'}

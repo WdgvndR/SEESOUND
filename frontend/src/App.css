@@ -614,6 +614,29 @@
     background: #e00020;
 }
 
+/* Color-preset bar (sits above ColorPaletteEditor) */
+.color-preset-bar {
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+    background: var(--bg);
+}
+
+.preset-bar-section-label {
+    font-size: 0.67rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding-bottom: 0.1rem;
+}
+
+.preset-bar-error {
+    font-size: 0.68rem;
+    color: #ff6060;
+    padding: 0.1rem 0;
+}
+
+
 @keyframes armed-pulse {
     from {
         box-shadow: 0 0 0 0 rgba(255, 60, 80, 0.4);
@@ -2195,6 +2218,48 @@
 .cm-math-arg:focus {
     outline: none;
     border-color: rgba(56, 189, 248, 0.45);
+}
+
+/* ── Color override picker ── */
+.cm-color-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.cm-color-picker {
+    width: 26px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    background: none;
+    flex-shrink: 0;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.cm-color-picker::-webkit-color-swatch-wrapper {
+    padding: 2px;
+    border-radius: 3px;
+}
+
+.cm-color-picker::-webkit-color-swatch {
+    border: none;
+    border-radius: 2px;
+}
+
+.cm-color-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    flex-shrink: 0;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
 }
 
 .cm-arrow {

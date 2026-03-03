@@ -3,38 +3,39 @@
   "params": {
     "layoutMode": 0,
     "persistMode": 1,
-    "blendMode": "source-over",
-    "inputGain": 3,
+    "blendMode": "screen",
+    "inputGain": 300,
     "amplitudeThreshold": -96,
     "perceptualLoudness": 60,
-    "attackSensitivity": 80,
-    "releaseDecay": 2,
-    "defaultParticleSize": 1.5,
-    "freqDepthEffect": 100,
-    "magnitudeSizeRatio": 0,
-    "amplitudeSizeStrength": 4,
+    "attackSensitivity": 0,
+    "releaseDecay": 0.05,
+    "defaultParticleSize": 1,
+    "freqDepthEffect": 0,
+    "magnitudeSizeRatio": 100,
+    "amplitudeSizeStrength": 0,
     "sizeExponent": 4,
-    "saliencyWeight": 100,
-    "shapeComplexity": 64,
-    "harmonicRoughness": 100,
+    "saliencyWeight": 125,
+    "shapeComplexity": 10,
+    "harmonicRoughness": 0,
     "edgeSoftness": 0,
     "saturationFloor": 20,
-    "dissonanceDesat": 50,
-    "brightnessScaling": 50,
+    "dissonanceDesat": 0,
+    "brightnessScaling": 0,
     "atmosphericPressure": 30,
     "lfWash": 40,
     "entropy": 20,
     "fluidDynamics": 30,
     "phaseInterference": 25,
     "linearShowGrid": 0,
-    "linearTrailFade": 0.05,
+    "linearTrailFade": 1,
     "linearParticleMode": 0,
     "lsAngleSpread": 18,
     "lsGrowthSpeed": 0.09,
     "lsLineWidth": 2.2,
     "lsMaxBranches": 300,
-    "chromaticGravity": 0,
-    "magneticOrientation": 0,
+    "chromaticGravity": 50,
+    "magneticOrientation": 50,
+    "ampstereoLimit": -6,
     "circRadiusScale": 1,
     "circFreqMapping": 0,
     "circChromaticGrav": 50,
@@ -64,81 +65,82 @@
     "ls3dLineWidth": 2.2,
     "ls3dElevation": 25,
     "ls3dRotation": 0,
-    "kineticPendulum": 50,
-    "acousticFriction": 40,
+    "kineticPendulum": 100,
+    "acousticFriction": 100,
     "zDepth": 40,
-    "harmonicClarity": 70,
-    "fieldRendering": 50,
-    "depthDisplacement": 30,
-    "sourceSeparation": 50,
+    "harmonicClarity": 20,
+    "fieldRendering": 0,
+    "depthDisplacement": 51,
+    "sourceSeparation": 57,
     "pitchSizeInversion": 0,
-    "octaveScaling": 50,
+    "octaveScaling": 0,
     "noteColors": {
       "C": [
-        255,
-        0,
-        0
+        220,
+        30,
+        30
       ],
       "C#": [
-        143,
-        0,
-        255
+        220,
+        90,
+        20
       ],
       "D": [
-        255,
-        255,
-        0
+        210,
+        145,
+        10
       ],
       "D#": [
-        183,
-        70,
-        139
+        190,
+        190,
+        10
       ],
       "E": [
-        195,
-        242,
-        255
+        120,
+        210,
+        20
       ],
       "F": [
-        170,
-        0,
-        52
+        30,
+        200,
+        80
       ],
       "F#": [
-        127,
-        139,
-        254
+        20,
+        185,
+        160
       ],
       "G": [
-        255,
-        127,
-        1
+        10,
+        145,
+        210
       ],
       "G#": [
-        187,
-        117,
-        252
+        20,
+        80,
+        220
       ],
       "A": [
-        54,
-        204,
-        51
+        70,
+        20,
+        220
       ],
       "A#": [
-        169,
-        103,
-        124
+        130,
+        15,
+        200
       ],
       "B": [
-        142,
-        201,
-        255
+        200,
+        15,
+        120
       ]
     },
     "colorInputMode": "rgb",
     "freqColorTable": {},
     "lightnessMin": 0.2,
-    "lightnessMax": 0.85
+    "lightnessMax": 0.85,
+    "interInstrumental": 50
   },
   "disabledKeys": [],
   "mappingGroups": [

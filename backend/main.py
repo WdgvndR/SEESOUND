@@ -31,6 +31,7 @@ from audio_analyzer import analyze_file, UNSUPPORTED_AUDIO_EXTS, ffmpeg_to_wav
 # ---------------------------------------------------------------------------
 
 PRESETS_DIR = Path(__file__).parent.parent / "presets"
+COLOR_PRESETS_DIR = PRESETS_DIR / "colors"
 
 
 class PresetBody(BaseModel):
@@ -522,8 +523,52 @@ async def delete_preset(name: str):
 
 
 # ---------------------------------------------------------------------------
-# Entry point
+# Color-preset endpoints  (presets/colors/*.json — note colors + dynamics only)
 # ---------------------------------------------------------------------------
+
+class ColorPresetBody(BaseModel):
+    name: str
+    colors: dict
+
+
+@app.get("/api/color-presets")
+async def list_color_presets():
+    COLOR_PRESETS_DIR.mkdir(parents=True, exist_ok=True)
+    names = [p.stem for p in sorted(COLOR_PRESETS_DIR.glob("*.json"))]
+    return {"names": names}
+
+
+@app.post("/api/color-presets")
+async def save_color_preset(body: ColorPresetBody):
+    COLOR_PRESETS_DIR.mkdir(parents=True, exist_ok=True)
+    safe = "".join(c for c in body.name if c.isalnum() or c in " _-").strip()
+    if not safe:
+        raise HTTPException(status_code=400, detail="Invalid preset name")
+    data = {"name": safe, "colors": body.colors}
+    (COLOR_PRESETS_DIR / f"{safe}.json").write_text(
+        json.dumps(data, indent=2, ensure_ascii=False)
+    )
+    return {"name": safe, "saved": True}
+
+
+@app.get("/api/color-presets/{name}")
+async def get_color_preset(name: str):
+    path = COLOR_PRESETS_DIR / f"{name}.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Color preset not found")
+    return json.loads(path.read_text())
+
+
+@app.delete("/api/color-presets/{name}")
+async def delete_color_preset(name: str):
+    path = COLOR_PRESETS_DIR / f"{name}.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Color preset not found")
+    path.unlink()
+    return {"deleted": True}
+
+
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

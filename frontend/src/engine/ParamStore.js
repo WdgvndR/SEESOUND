@@ -221,7 +221,7 @@ export const PARAMS = [
     },
     {
         key: 'zDepth', group: 'advanced', label: 'Z-Axis Depth',
-        min: 0, max: 100, step: 1, default: 40, unit: '%',
+        min: 0, max: 100, step: 1, default: 0, unit: '%',
         desc: 'As a note ages it shrinks and fades to simulate depth recession. At 100% old notes shrink to ~20% of their original size.',
         canDisable: true,
     },
