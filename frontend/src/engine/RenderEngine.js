@@ -425,7 +425,7 @@ export class RenderEngine {
             if (this._graphEval && this._graphEval.hasGraph) {
                 var _fNorm = clamp(freqLogNorm, 0, 1)
                 var _pd = { amplitude: ampScaled, freqNorm: _fNorm, pan: c.pan, age: compAge, clarity: clarityVal, dissonance: dissonance }
-                var _fd = { rms: rmsNorm, bpm: bpm, bassEnergy: bassEnergy, components: components }
+                var _fd = { rms: rmsNorm, bpm: bpm, bassEnergy: bassEnergy }
                 var _mods = this._graphEval.evaluate(_pd, _fd)
                 var _applyMod = function (v, m, lo, hi) {
                     if (!m) return v
@@ -441,8 +441,6 @@ export class RenderEngine {
                 if (_mods.alpha_mult) alpha = clamp(alpha * _mods.alpha_mult.value, 0, 1)
                 if (_mods.cx_offset) cx += _mods.cx_offset.value * w * 0.5
                 if (_mods.cy_offset) cy += _mods.cy_offset.value * h * 0.5
-                if (_mods.blur_add) blur = clamp(blur + _mods.blur_add.value * 16, 0, 32)
-                if (_mods.vertices_add) vertices = clamp(vertices + Math.round(_mods.vertices_add.value * 32), 3, 64)
                 // Recompute color with potentially-updated hue / sat / lit / alpha
                 color = hsla(hue, clamp(sat, 0, 1), clamp(lit, 0.05, 0.95), alpha)
             }

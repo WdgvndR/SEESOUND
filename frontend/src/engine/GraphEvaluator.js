@@ -77,6 +77,7 @@ export const VISUAL_OUTPUTS = {
     alpha_mult: { label: 'Alpha x', desc: 'Multiplies the particle alpha/opacity' },
     cx_offset: { label: 'X Offset', desc: 'Horizontal shift (0-1 = +/- half canvas)' },
     cy_offset: { label: 'Y Offset', desc: 'Vertical shift (0-1 = +/- half canvas)' },
+    z_offset: { label: 'Z Offset', desc: 'Depth shift (0-1 = +/- half depth)' },
     blur_add: { label: 'Blur + px', desc: 'Adds blur in pixels (0-1 = 0-16 px)' },
     vertices_add: { label: 'Vertices +', desc: 'Adds polygon vertices (0-1 = 0-32 extra)' },
 }

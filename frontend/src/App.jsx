@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNodesState, useEdgesState, addEdge as rfAddEdge } from '@xyflow/react'
 import { useWebSocket } from './hooks/useWebSocket'
 import ParameterPanel from './components/ParameterPanel'
-import { newGroup } from './components/ParameterPanel'
 import StatusBar from './components/StatusBar'
 import MusicPlayer from './components/MusicPlayer'
 import FrequencyMonitor from './components/FrequencyMonitor'
 import { getDefaultParams, applyDisabled, loadDisabledParams, saveDisabledParams } from './config/params'
 import { RenderEngine } from './engine/RenderEngine'
-import { GraphEvaluator, flattenRules } from './engine/GraphEvaluator'
+import { ThreeEngine } from './engine/ThreeEngine'
+import { GraphEvaluator } from './engine/GraphEvaluator'
 import './App.css'
 
 const API_BASE = 'http://localhost:8000'
@@ -36,6 +37,8 @@ export default function App() {
     const isBufferingRef = useRef(false)    // true when playback is ahead of analysis
     const jobStatusRef = useRef(null)       // mirror of jobStatus state for rAF closures
     const jobIdRef = useRef(null)           // mirror of jobId state for interval/rAF closures
+    const threeEngineRef = useRef(null)     // Three.js engine (layout mode 8 only)
+    const threeContainerRef = useRef(null)  // container div for WebGL canvas
 
     // ── Binary-search for the closest frame at or before `t` seconds ─────
     function findFrameAt(t) {
@@ -72,7 +75,12 @@ export default function App() {
 
             const frame = findFrameAt(t)
             if (frame && frame.time_seconds !== lastRenderedTimeRef.current) {
-                engineRef.current?.renderFrame(frame, applyDisabled(paramsRef.current, disabledKeysRef.current), t, audio.duration || 0)
+                const _p = applyDisabled(paramsRef.current, disabledKeysRef.current)
+                if (paramsRef.current.layoutMode === 8) {
+                    threeEngineRef.current?.renderFrame(frame, _p, t, audio.duration || 0)
+                } else {
+                    engineRef.current?.renderFrame(frame, _p, t, audio.duration || 0)
+                }
                 lastRenderedTimeRef.current = frame.time_seconds
                 latestFrameRef.current = frame
                 if (!rafPendingRef.current) {
@@ -80,7 +88,9 @@ export default function App() {
                     requestAnimationFrame(() => {
                         rafPendingRef.current = false
                         setCurrentFrame(latestFrameRef.current)
-                        setFps(Math.round(engineRef.current?.fps || 0))
+                        const _activeEng = paramsRef.current.layoutMode === 8
+                            ? threeEngineRef.current : engineRef.current
+                        setFps(Math.round(_activeEng?.fps || 0))
                     })
                 }
             }
@@ -101,8 +111,13 @@ export default function App() {
         const audio = audioRef.current
         if (audio && !audio.paused) return
         const frame = findFrameAt(t)
-        if (frame && engineRef.current) {
-            engineRef.current.renderFrame(frame, applyDisabled(paramsRef.current, disabledKeysRef.current), t, audio?.duration || 0)
+        if (frame) {
+            const _p = applyDisabled(paramsRef.current, disabledKeysRef.current)
+            if (paramsRef.current.layoutMode === 8) {
+                threeEngineRef.current?.renderFrame(frame, _p, t, audio?.duration || 0)
+            } else if (engineRef.current) {
+                engineRef.current.renderFrame(frame, _p, t, audio?.duration || 0)
+            }
             lastRenderedTimeRef.current = frame.time_seconds
             setCurrentFrame(frame)
         }
@@ -129,6 +144,7 @@ export default function App() {
         const syncDur = () => {
             if (!isNaN(audio.duration) && audio.duration > 0) {
                 engineRef.current?.setTrackDuration(audio.duration)
+                threeEngineRef.current?.setTrackDuration(audio.duration)
             }
         }
         audio.addEventListener('loadedmetadata', syncDur)
@@ -151,38 +167,15 @@ export default function App() {
     disabledKeysRef.current = disabledKeys  // always-fresh ref for rAF tick
     const [panelCollapsed, setPanelCollapsed] = useState(false)
 
-    // ── Panel resize widths ───────────────────────────────────────────────
-    const [leftW, setLeftW] = useState(280)
-    const [rightW, setRightW] = useState(240)
-
-    const makeResizeHandle = useCallback((setW, currentW, dir /* 'left'|'right' */) => {
-        return (e) => {
-            e.preventDefault()
-            const startX = e.clientX
-            const startW = currentW
-            const onMove = (ev) => {
-                const delta = ev.clientX - startX
-                setW(Math.max(160, Math.min(700, startW + (dir === 'right' ? -delta : delta))))
-            }
-            const onUp = () => {
-                window.removeEventListener('mousemove', onMove)
-                window.removeEventListener('mouseup', onUp)
-                document.body.style.cursor = ''
-                document.body.style.userSelect = ''
-            }
-            document.body.style.cursor = 'col-resize'
-            document.body.style.userSelect = 'none'
-            window.addEventListener('mousemove', onMove)
-            window.addEventListener('mouseup', onUp)
-        }
-    }, [])
-
-    // ── Mapping groups state ──────────────────────────────────────────────
-    const [mappingGroups, setMappingGroups] = useState([])
+    // ── Node graph state ──────────────────────────────────────────────────
+    const [activePanel, setActivePanel] = useState('params')
+    const [nodes, setNodes, onNodesChange] = useNodesState([])
+    const [edges, setEdges, onEdgesChange] = useEdgesState([])
     const graphEvalRef = useRef(null)
 
     const handleClear = useCallback(() => {
         engineRef.current?.clear()
+        threeEngineRef.current?.clear()
     }, [])
 
     const handleToggleDisabled = useCallback((key) => {
@@ -196,17 +189,21 @@ export default function App() {
         requestAnimationFrame(() => renderAtTime(audioRef.current?.currentTime ?? 0))
     }, [renderAtTime])
 
-    const handlePresetLoad = useCallback(({ params: presetParams, mappingGroups: presetGroups = [] } = {}) => {
+    const handlePresetLoad = useCallback(({ params: presetParams, nodes: presetNodes = [], edges: presetEdges = [], mappingGroups: presetMappingGroups } = {}) => {
         if (!presetParams) return
         // Merge loaded preset with current defaults so any new fields
         // (e.g. freqColorTable, lightnessMin from old presets) are filled in.
         const merged = { ...getDefaultParams(), ...presetParams }
         setParams(merged)
         paramsRef.current = merged
-        setMappingGroups(presetGroups)
+        // Restore node graph if included in preset
+        setNodes(presetNodes)
+        setEdges(presetEdges)
+        // Restore mapping groups if included in preset
+        if (Array.isArray(presetMappingGroups)) setMappingGroups(presetMappingGroups)
         if (status === 'open') sendMessage({ type: 'params', payload: merged })
         renderAtTime(audioRef.current?.currentTime ?? 0)
-    }, [status, sendMessage, renderAtTime])
+    }, [status, sendMessage, renderAtTime, setNodes, setEdges])
 
     // ── Job / playback state ──────────────────────────────────────────────
     const [audioFile, setAudioFile] = useState(null)
@@ -223,6 +220,7 @@ export default function App() {
     const [isPaintQueued, setIsPaintQueued] = useState(false)
     const [isRecording, setIsRecording] = useState(false)
     const [isBuffering, setIsBuffering] = useState(false)
+    const [mappingGroups, setMappingGroups] = useState([])
 
     // Sync jobStatusRef so the rAF tick can read current status without stale closures
     useEffect(() => { jobStatusRef.current = jobStatus }, [jobStatus])
@@ -287,21 +285,48 @@ export default function App() {
         return () => {
             engineRef.current?.destroy()
             engineRef.current = null
+            threeEngineRef.current?.destroy()
+            threeEngineRef.current = null
         }
     }, [])
 
-    // ── Compile & wire graph evaluator whenever mapping groups change ──────
+    // ── Three.js engine lifecycle: create/destroy when switching to/from mode 8 ──
+    useEffect(() => {
+        if (params.layoutMode === 8) {
+            if (!threeEngineRef.current && threeContainerRef.current) {
+                try {
+                    threeEngineRef.current = new ThreeEngine(threeContainerRef.current)
+                    // Sync track duration if already known
+                    const dur = audioRef.current?.duration
+                    if (dur && dur > 0) threeEngineRef.current.setTrackDuration(dur)
+                } catch (err) {
+                    console.error('[App] ThreeEngine init failed:', err)
+                    threeEngineRef.current = null
+                }
+            }
+        } else {
+            if (threeEngineRef.current) {
+                threeEngineRef.current.destroy()
+                threeEngineRef.current = null
+            }
+        }
+    }, [params.layoutMode])
+
+    // ── Compile & wire graph evaluator whenever nodes/edges change ────────
     useEffect(() => {
         if (!graphEvalRef.current) {
             graphEvalRef.current = new GraphEvaluator()
         }
         const ge = graphEvalRef.current
-        ge.compile(flattenRules(mappingGroups))
+        ge.compile(nodes, edges)
         engineRef.current?.setGraphEvaluator(ge)
-    }, [mappingGroups])
+    }, [nodes, edges])
 
     useEffect(() => {
-        const onResize = () => engineRef.current?.resize()
+        const onResize = () => {
+            engineRef.current?.resize()
+            threeEngineRef.current?.resize()
+        }
         window.addEventListener('resize', onResize)
         return () => window.removeEventListener('resize', onResize)
     }, [])
@@ -329,6 +354,7 @@ export default function App() {
                     setCurrentFrame(null)
                     setFrameCount(0)
                     engineRef.current?.clear()
+                    threeEngineRef.current?.clear()
                     // Reset buffering state for new job
                     analysisFrontierRef.current = -1
                     isBufferingRef.current = false
@@ -404,6 +430,7 @@ export default function App() {
         frameCountRef.current = 0
         lastRenderedTimeRef.current = -1
         engineRef.current?.clear()
+        threeEngineRef.current?.clear()
         setAudioFile(file)
         setCurrentFrame(null)
         setFrameCount(0)
@@ -519,7 +546,9 @@ export default function App() {
             return
         }
 
-        const canvas = canvasRef.current
+        const canvas = (paramsRef.current.layoutMode === 8 && threeEngineRef.current)
+            ? threeEngineRef.current.renderer.domElement
+            : canvasRef.current
         if (!canvas) return
 
         try {
@@ -580,7 +609,10 @@ export default function App() {
 
     // ── Save canvas as PNG ─────────────────────────────────────────────
     const handleSave = useCallback(() => {
-        const canvas = canvasRef.current
+        // In 3D mode use the WebGL canvas from the ThreeEngine renderer
+        const canvas = (paramsRef.current.layoutMode === 8 && threeEngineRef.current)
+            ? threeEngineRef.current.renderer.domElement
+            : canvasRef.current
         if (!canvas) return
         const url = canvas.toDataURL('image/png')
         const a = document.createElement('a')
@@ -595,13 +627,30 @@ export default function App() {
         sendMessage({ type: 'stop', payload: { job_id: jobId } })
     }, [sendMessage, jobId])
 
+    // ── Node graph handlers ───────────────────────────────────────────────
+    const handleConnect = useCallback((params) => {
+        setEdges(eds => rfAddEdge({ ...params, animated: true, style: { stroke: '#4d7fa8', strokeWidth: 2 } }, eds))
+    }, [setEdges])
 
+    const handleUpdateNode = useCallback((id, newData) => {
+        setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...newData, onChange: undefined, onDelete: undefined } } : n))
+    }, [setNodes])
+
+    const handleAddNode = useCallback((nodeObj) => {
+        // Strip injected callbacks before storing
+        const { data: { onChange: _oc, onDelete: _od, ...restData } = {}, ...rest } = nodeObj
+        setNodes(nds => [...nds, { ...rest, data: restData }])
+    }, [setNodes])
+
+    const handleDeleteNode = useCallback((id) => {
+        setNodes(nds => nds.filter(n => n.id !== id))
+        setEdges(eds => eds.filter(e => e.source !== id && e.target !== id))
+    }, [setNodes, setEdges])
 
     // ─────────────────────────────────────────────────────────────────────
     return (
         <div className="app-layout">
             <ParameterPanel
-                panelStyle={{ width: panelCollapsed ? 36 : leftW, minWidth: panelCollapsed ? 36 : leftW, transition: 'none' }}
                 values={params}
                 onChange={handleParamChange}
                 onReset={handleReset}
@@ -611,14 +660,22 @@ export default function App() {
                 onColorModeChange={handleColorModeChange}
                 onCalculateAll={handleCalculateAll}
                 onTableEntryChange={handleTableEntryChange}
-                onPresetLoad={handlePresetLoad}
-                mappingGroups={mappingGroups}
-                onMappingGroupsChange={setMappingGroups}
                 disabledKeys={disabledKeys}
                 onToggleDisabled={handleToggleDisabled}
+                onPresetLoad={handlePresetLoad}
+                activeTab={activePanel}
+                onTabChange={setActivePanel}
+                currentNodes={nodes}
+                currentEdges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={handleConnect}
+                onUpdateNode={handleUpdateNode}
+                onAddNode={handleAddNode}
+                onDeleteNode={handleDeleteNode}
+                mappingGroups={mappingGroups}
+                onMappingGroupsChange={setMappingGroups}
             />
-
-            <div className="resize-handle" onMouseDown={makeResizeHandle(setLeftW, leftW, 'left')} title="Drag to resize" />
 
             <main className="main-area">
                 <header className="main-header">
@@ -639,10 +696,26 @@ export default function App() {
                     isBuffering={isBuffering}
                 />
 
-                {/* Canvas */}
-                <div className="canvas-container">
+                {/* 2-D Canvas (modes 0-7) */}
+                <div className="canvas-container" style={{ display: params.layoutMode === 8 ? 'none' : undefined }}>
                     <canvas ref={canvasRef} className="render-canvas"
                         style={{ width: canvasW + 'px', height: canvasH + 'px' }} />
+                </div>
+
+                {/* Three.js 3D Canvas (mode 8 – Deep Space) */}
+                <div className="canvas-container" style={{ display: params.layoutMode !== 8 ? 'none' : undefined }}>
+                    <div
+                        ref={threeContainerRef}
+                        style={{
+                            width: canvasW + 'px',
+                            height: canvasH + 'px',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            borderRadius: '6px',
+                            flexShrink: 0,
+                            background: '#060608',
+                        }}
+                    />
                 </div>
 
                 {/* Canvas toolbar: resize + save */}
@@ -693,10 +766,7 @@ export default function App() {
                 />
             </main>
 
-            <div className="resize-handle" onMouseDown={makeResizeHandle(setRightW, rightW, 'right')} title="Drag to resize" />
-
             <FrequencyMonitor
-                panelStyle={{ width: monitorCollapsed ? 32 : rightW, minWidth: monitorCollapsed ? 32 : rightW, transition: 'none' }}
                 frame={currentFrame}
                 noteColors={params.noteColors}
                 collapsed={monitorCollapsed}
