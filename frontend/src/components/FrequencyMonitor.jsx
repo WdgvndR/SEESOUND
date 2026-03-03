@@ -8,6 +8,30 @@ const LOG_MAX = Math.log10(22050)
 // All 12 chromatic pitch classes in ascending order
 var NOTE_ORDER = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
+// Map frequency → note-octave key (e.g. "A4", "C#3") matching the freqColorTable
+function freqToNoteOctave(freq) {
+    if (!freq || freq <= 0) return 'C0'
+    var midi = Math.round(69 + 12 * Math.log2(freq / 440))
+    midi = Math.max(12, Math.min(131, midi))
+    var octave = Math.floor(midi / 12) - 1
+    return NOTE_ORDER[midi % 12] + octave
+}
+
+// Return the best available color for a component given the current palette.
+// Priority: freqColorTable[noteOctave] > noteColors[note] > c.color_rgb
+function resolveColor(c, freqColorTable, noteColors) {
+    if (freqColorTable) {
+        var key = freqToNoteOctave(c.freq)
+        var tc = freqColorTable[key]
+        if (tc) return tc
+    }
+    if (noteColors && c.note) {
+        var nc = noteColors[c.note]
+        if (nc) return nc
+    }
+    return c.color_rgb
+}
+
 function freqToX(freq, width) {
     var logF = Math.log10(Math.max(freq, 20))
     return ((logF - LOG_MIN) / (LOG_MAX - LOG_MIN)) * width
@@ -295,8 +319,13 @@ function ComponentRow({ c }) {
  *   collapsed  — boolean
  *   onToggle   — () => void
  */
-export default function FrequencyMonitor({ frame, collapsed, onToggle, panelStyle }) {
-    var components = (frame && frame.components) ? frame.components : []
+export default function FrequencyMonitor({ frame, noteColors, freqColorTable, collapsed, onToggle, panelStyle }) {
+    var rawComponents = (frame && frame.components) ? frame.components : []
+    // Remap color_rgb from the live palette so color always reflects the current preset
+    var components = rawComponents.map(function (c) {
+        var resolved = resolveColor(c, freqColorTable, noteColors)
+        return resolved !== c.color_rgb ? Object.assign({}, c, { color_rgb: resolved }) : c
+    })
     var rms = frame ? (frame.rms_db != null ? frame.rms_db.toFixed(1) + ' dB' : '—') : '—'
     var time = frame ? frame.time_seconds.toFixed(3) + ' s' : '—'
     var qty = components.length

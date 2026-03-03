@@ -1,0 +1,141 @@
+{
+  "name": "3d spiral",
+  "params": {
+    "layoutMode": 5,
+    "persistMode": 1,
+    "blendMode": "screen",
+    "inputGain": 1,
+    "amplitudeThreshold": -85,
+    "perceptualLoudness": 60,
+    "attackSensitivity": 80,
+    "releaseDecay": 0.05,
+    "defaultParticleSize": 3,
+    "freqDepthEffect": 100,
+    "magnitudeSizeRatio": 0,
+    "amplitudeSizeStrength": 4,
+    "sizeExponent": 4,
+    "saliencyWeight": 100,
+    "shapeComplexity": 64,
+    "harmonicRoughness": 100,
+    "edgeSoftness": 0,
+    "saturationFloor": 20,
+    "dissonanceDesat": 50,
+    "brightnessScaling": 50,
+    "atmosphericPressure": 0,
+    "lfWash": 40,
+    "entropy": 20,
+    "fluidDynamics": 30,
+    "phaseInterference": 25,
+    "linearShowGrid": 0,
+    "linearTrailFade": 0.05,
+    "linearParticleMode": 0,
+    "lsAngleSpread": 18,
+    "lsGrowthSpeed": 0.09,
+    "lsLineWidth": 2.2,
+    "lsMaxBranches": 300,
+    "circRadiusScale": 1,
+    "circFreqMapping": 0,
+    "circChromaticGrav": 50,
+    "circMagOrientation": 50,
+    "circInterInstr": 50,
+    "threedParticleSize": 0.097,
+    "threedSpreadMul": 0.35,
+    "threedBloom": 0.4,
+    "threedAfterimage": 0,
+    "threedFogDensity": 0,
+    "threedFreqDepthBias": 0,
+    "cameraMode": 2,
+    "cameraFov": 120,
+    "cameraDistance": 8,
+    "cameraAzimuth": 179,
+    "cameraElevation": 0,
+    "cameraSpeed": 1.6,
+    "cameraOrbit": 0.18,
+    "lin3dHistoryDepth": 80,
+    "lin3dZStep": 0.7,
+    "spiralTurns": 1.5,
+    "spiralRadius": 1.1,
+    "spiralPitch": 0.5,
+    "spiralHistoryDepth": 200,
+    "ls3dAngleSpread": 18,
+    "ls3dGrowthSpeed": 0.09,
+    "ls3dLineWidth": 2.2,
+    "ls3dElevation": 25,
+    "ls3dRotation": 0,
+    "kineticPendulum": 50,
+    "acousticFriction": 40,
+    "zDepth": 40,
+    "harmonicClarity": 70,
+    "fieldRendering": 50,
+    "depthDisplacement": 30,
+    "sourceSeparation": 50,
+    "pitchSizeInversion": 0,
+    "octaveScaling": 50,
+    "noteColors": {
+      "C": [
+        255,
+        0,
+        0
+      ],
+      "C#": [
+        143,
+        0,
+        255
+      ],
+      "D": [
+        255,
+        255,
+        0
+      ],
+      "D#": [
+        183,
+        70,
+        139
+      ],
+      "E": [
+        195,
+        242,
+        255
+      ],
+      "F": [
+        170,
+        0,
+        52
+      ],
+      "F#": [
+        127,
+        139,
+        254
+      ],
+      "G": [
+        255,
+        127,
+        1
+      ],
+      "G#": [
+        187,
+        117,
+        252
+      ],
+      "A": [
+        54,
+        204,
+        51
+      ],
+      "A#": [
+        169,
+        103,
+        124
+      ],
+      "B": [
+        142,
+        201,
+        255
+      ]
+    },
+    "colorInputMode": "rgb",
+    "freqColorTable": {},
+    "lightnessMin": 0.2,
+    "lightnessMax": 0.85
+  }
+}

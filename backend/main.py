@@ -36,6 +36,10 @@ PRESETS_DIR = Path(__file__).parent.parent / "presets"
 class PresetBody(BaseModel):
     name: str
     params: dict
+    disabledKeys: list = []
+    mappingGroups: list = []
+    canvasW: int | None = None
+    canvasH: int | None = None
 
 # ---------------------------------------------------------------------------
 # App bootstrap
@@ -68,16 +72,16 @@ _jobs: dict[str, dict] = {}
 # Per-connection session params  { ws_id: AnalysisParams }
 _session_params: dict[int, AnalysisParams] = {}
 
-# Live subscribers per job: { job_id: [WebSocket] }
+# Live subscribers per job: { job_id: set[WebSocket] }
 # Registered when client subscribes to an in-progress job
-_job_subscribers: dict[str, list] = {}
+_job_subscribers: dict[str, set] = {}
 
 # Current playback position per job reported by the frontend (seconds).
 # -1 means the user has not started playback yet — analysis runs freely.
 _job_playback_time: dict[str, float] = {}
 
 # Max seconds of analysis ahead of the current playback position.
-LOOKAHEAD_S: float = 30.0
+LOOKAHEAD_S: float = 60.0
 
 # ---------------------------------------------------------------------------
 # Connection manager
@@ -212,18 +216,16 @@ async def _run_analysis_job(
             msg = {"type": "frame", "job_id": job_id, "payload": frame_dict}
             await _send_to_all(msg)
 
-            # ── 30-second lookahead throttle ───────────────────────────────
-            # Only active once the frontend has sent at least one playback_time
-            # update (pb_time >= 0).  This keeps analysis from running the
-            # entire file at once while the user is still at t=0.
+            # ── Strict 30-second lookahead throttle ────────────────────────────
+            # Always active: treat "not started yet" (pb_time == -1) as position 0
+            # so analysis never runs more than 30 s ahead even before playback begins.
             pb_time = _job_playback_time.get(job_id, -1.0)
-            if pb_time >= 0:
-                frame_time = frame_dict.get("time_seconds", 0.0)
-                while frame_time > pb_time + LOOKAHEAD_S:
-                    await asyncio.sleep(0.05)
-                    pb_time = _job_playback_time.get(job_id, -1.0)
-                    if pb_time < 0:   # playback reset / stopped
-                        break
+            effective_pb = max(0.0, pb_time)   # -1 sentinel → 0
+            frame_time = frame_dict.get("time_seconds", 0.0)
+            while frame_time > effective_pb + LOOKAHEAD_S:
+                await asyncio.sleep(0.05)
+                pb_time = _job_playback_time.get(job_id, -1.0)
+                effective_pb = max(0.0, pb_time)
 
             frame_idx = frame_dict.get("frame_index", 0)
 
@@ -486,8 +488,18 @@ async def save_preset(body: PresetBody):
     safe = "".join(c for c in body.name if c.isalnum() or c in " _-").strip()
     if not safe:
         raise HTTPException(status_code=400, detail="Invalid preset name")
+    data: dict = {
+        "name": safe,
+        "params": body.params,
+        "disabledKeys": body.disabledKeys,
+        "mappingGroups": body.mappingGroups,
+    }
+    if body.canvasW is not None:
+        data["canvasW"] = body.canvasW
+    if body.canvasH is not None:
+        data["canvasH"] = body.canvasH
     (PRESETS_DIR / f"{safe}.json").write_text(
-        json.dumps({"name": safe, "params": body.params}, indent=2, ensure_ascii=False)
+        json.dumps(data, indent=2, ensure_ascii=False)
     )
     return {"name": safe, "saved": True}
 

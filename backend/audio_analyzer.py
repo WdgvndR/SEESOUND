@@ -478,23 +478,58 @@ def analyze_buffer(
 # Format detection + ffmpeg conversion
 # ---------------------------------------------------------------------------
 
-# Extensions that libsndfile cannot decode and must be pre-converted.
+# Extensions that libsndfile cannot decode and must be pre-converted via ffmpeg.
+# MP3 / MP2 are excluded because libsndfile lacks MPEG support on most systems;
+# routing them through ffmpeg_to_wav ensures proper streaming without loading
+# the whole file into RAM via librosa.load.
 UNSUPPORTED_AUDIO_EXTS: frozenset[str] = frozenset({
-    '.m4a', '.aac', '.mp4', '.wma', '.opus',
+    '.mp3', '.mp2',                 # MPEG audio — libsndfile has no MPEG decoder
+    '.m4a', '.aac', '.mp4',        # AAC/MPEG-4 containers
+    '.wma',                         # Windows Media Audio
+    '.opus',                        # Opus (Ogg container variant)
+    '.aif', '.aiff',               # AIFF — occasionally misidentified by libsndfile
 })
+
+
+def _resolve_ffmpeg_exe() -> str:
+    """
+    Return the path to an ffmpeg executable.
+    Tries system PATH first, then the bundled binary from imageio-ffmpeg.
+    Raises RuntimeError if neither is available.
+    """
+    import shutil
+    exe = shutil.which('ffmpeg')
+    if exe:
+        return exe
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pass
+    raise RuntimeError(
+        "ffmpeg not found.  Install ffmpeg (https://ffmpeg.org/download.html) "
+        "or run: pip install imageio-ffmpeg"
+    )
 
 
 def ffmpeg_to_wav(src: Path) -> Path:
     """
     Convert *src* to a temporary 44100 Hz stereo WAV using ffmpeg.
+    Automatically uses the bundled imageio-ffmpeg binary when system ffmpeg
+    is not on PATH, so this works out-of-the-box without any system install.
 
     Returns the Path to the new temporary file.  The caller is responsible
     for deleting it when done.
 
-    Raises RuntimeError if ffmpeg is not found on PATH or if conversion fails.
+    Raises RuntimeError if conversion fails.
     """
     import subprocess
     import tempfile
+
+    try:
+        ffmpeg_exe = _resolve_ffmpeg_exe()
+    except RuntimeError as exc:
+        raise RuntimeError(str(exc)) from None
 
     out = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
     out.close()
@@ -503,7 +538,7 @@ def ffmpeg_to_wav(src: Path) -> Path:
     try:
         result = subprocess.run(
             [
-                'ffmpeg', '-y',
+                ffmpeg_exe, '-y',
                 '-i', str(src),
                 '-ar', '44100',
                 '-sample_fmt', 's16',
@@ -512,12 +547,6 @@ def ffmpeg_to_wav(src: Path) -> Path:
             ],
             capture_output=True,
             timeout=600,
-        )
-    except FileNotFoundError:
-        out_path.unlink(missing_ok=True)
-        raise RuntimeError(
-            "ffmpeg not found on PATH.  Install ffmpeg to enable M4A / AAC / "
-            "WMA / OPUS support.  See https://ffmpeg.org/download.html"
         )
     except subprocess.TimeoutExpired:
         out_path.unlink(missing_ok=True)

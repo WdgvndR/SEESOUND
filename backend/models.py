@@ -105,7 +105,6 @@ class AnalysisParams(BaseModel):
     # FFT
     fft_size: int = Field(default=2048, description="FFT window size (samples)")
     hop_size: int = Field(default=2048,  description="Hop length between frames (2048 ≈ 21 fps at 44100 Hz — safe for any song length)")
-    window: str   = Field(default="hann", description="Window function name")
 
     # Tonic / root frequency
     tonic_freq: float = Field(default=0.0,
@@ -287,7 +286,6 @@ class ColorParams(BaseModel):
             w_r=self.w_r,
             w_g=self.w_g,
             w_b=self.w_b,
-            tolerance=self.tolerance,
             color_input_mode=self.color_input_mode,
             note_colors={k: tuple(v) for k, v in self.note_colors.items()},
             lightness_min=self.lightness_min,
@@ -301,11 +299,3 @@ class ColorParams(BaseModel):
         return cfg
 
 
-# ---------------------------------------------------------------------------
-# WebSocket message envelope
-# ---------------------------------------------------------------------------
-
-class WSMessage(BaseModel):
-    """Thin envelope used for all client ↔ server WebSocket traffic."""
-    type: str
-    payload: dict = Field(default_factory=dict)

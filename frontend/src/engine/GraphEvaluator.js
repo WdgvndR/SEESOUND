@@ -19,12 +19,17 @@
 
 export const AUDIO_INPUTS = {
     // ── Per-particle ─────────────────────────────────────────────────────────
-    amplitude: { label: 'Amplitude', group: 'Particle', desc: 'Normalised loudness of this partial (0–1)' },
-    frequency: { label: 'Frequency', group: 'Particle', desc: 'Log-normalised pitch of this partial (0 = 20 Hz, 1 = 20 kHz)' },
-    pan: { label: 'Pan', group: 'Particle', desc: 'Stereo position of this partial (0 = left, 1 = right)' },
-    age: { label: 'Age', group: 'Particle', desc: 'How long this partial has been active (5 s = 1.0)' },
-    clarity: { label: 'Clarity', group: 'Particle', desc: 'Spectral purity; 1 = pure sine tone, 0 = noise/inharmonic' },
-    dissonance: { label: 'Dissonance', group: 'Particle', desc: 'Harmonic roughness of this partial (0 = consonant, 1 = dissonant)' },
+    amplitude: { label: 'Amplitude', group: 'Particle', desc: 'Normalised loudness of this partial (0-1)' },
+    frequency: { label: 'Frequency', group: 'Particle', desc: 'Log-normalised pitch of this partial (0 = 20 Hz, 1 = 20 kHz). Maps every detected frequency component — bassier notes yield low values, higher-pitched notes yield values closer to 1.' },
+    pan: { label: 'Pan (L/R)', group: 'Particle', desc: 'Stereo position of this partial (0 = hard left, 0.5 = centre, 1 = hard right). Use to push left-panned sounds to the left of the canvas and right-panned sounds to the right.' },
+    stereo: { label: 'Stereo Width', group: 'Particle', desc: 'Absolute distance from the stereo centre (0 = dead centre, 1 = fully panned either side). Ignores L/R direction — triggers equally for hard-left and hard-right signals.' },
+    age: { label: 'Age', group: 'Particle', desc: 'How long this partial has been active (5 s = 1.0). Fade in late-sustaining notes, grow shapes over time, or trigger decay effects once a note has been held long enough.' },
+    timbre: { label: 'Timbre Brightness', group: 'Particle', desc: 'Spectral brightness of this partial: ratio of energy in upper harmonics vs. fundamental (0 = dark/mellow, 1 = bright/rich overtones). Distinguishes a bright electric guitar from a mellow double bass even at the same pitch and loudness.' },
+    clarity: { label: 'Clarity', group: 'Particle', desc: 'Spectral purity; 1 = pure sine tone, 0 = noise/inharmonic. High clarity = flute, tuning fork; low clarity = distorted guitar, cymbals, breath noise.' },
+    dissonance: { label: 'Dissonance', group: 'Particle', desc: 'Harmonic roughness of this partial (0 = consonant, 1 = dissonant). Peaks when two close-frequency partials beat against each other.' },
+    // ── Instrument likelihood (per-partial) ──────────────────────────────────
+    inst_percussive: { label: 'Percussive Strike', group: 'Instruments', desc: 'Likelihood this partial belongs to a percussive event (0-1). High on sharp transients like drums, piano attacks and plucked strings. Derived from onset strength and spectral flux.' },
+    inst_sustain: { label: 'Sustained Tone', group: 'Instruments', desc: 'Likelihood this partial belongs to a sustained tonal instrument (0-1). High on organ, strings, pads and held vocal notes. Functionally the inverse of Percussive Strike.' },
     // ── Full-mix frame ───────────────────────────────────────────────────────
     rms: { label: 'RMS Level', group: 'Frame', desc: 'Full-mix RMS energy this frame (0–1)' },
     bpm: { label: 'BPM', group: 'Frame', desc: 'Detected tempo, normalised (240 BPM = 1.0)' },
@@ -70,17 +75,47 @@ export const MATH_OPS = {
 }
 
 export const VISUAL_OUTPUTS = {
-    radius_mult: { label: 'Radius x', desc: 'Multiplies the base particle radius' },
-    hue_add: { label: 'Hue + deg', desc: 'Rotates hue (0-1 maps to 0-360 deg)' },
-    saturation: { label: 'Saturation', desc: 'Modify HSL saturation (0-1)' },
-    lightness: { label: 'Lightness', desc: 'Modify HSL lightness (0-1)' },
-    alpha_mult: { label: 'Alpha x', desc: 'Multiplies the particle alpha/opacity' },
-    cx_offset: { label: 'X Offset', desc: 'Horizontal shift (0-1 = +/- half canvas)' },
-    cy_offset: { label: 'Y Offset', desc: 'Vertical shift (0-1 = +/- half canvas)' },
-    z_offset: { label: 'Z Offset', desc: 'Depth shift (0-1 = +/- half depth)' },
-    blur_add: { label: 'Blur + px', desc: 'Adds blur in pixels (0-1 = 0-16 px)' },
-    vertices_add: { label: 'Vertices +', desc: 'Adds polygon vertices (0-1 = 0-32 extra)' },
+    // ── PARTICLE ──────────────────────────────────────────────────────────────
+    quantity_mult: { label: 'Quantity x', group: 'Particle', desc: 'Multiplies the number of particles drawn this frame (>1 spawns extra copies; <1 culls some). Map a loud bass hit to burst out dense particle clouds.' },
+    radius_mult: { label: 'Size x', group: 'Particle', desc: 'Multiplies the base particle radius. 1 = unchanged; 2 = double size; 0 = invisible.' },
+    vertices_add: { label: 'No. of Vertices +', group: 'Particle', desc: 'Adds polygon vertices (0-1 = 0-32 extra). Low = triangles/squares; high = smooth near-circles. Dissonance -> vertices makes clashing intervals look spiky.' },
+    hue_add: { label: 'Color / Hue +deg', group: 'Particle', desc: 'Rotates the assigned hue by up to 360 deg. 0.5 shifts by 180 deg (complementary colour). Frequency -> hue tints bass red and treble blue.' },
+    blend_mode_idx: { label: 'Mixing Mode (Blend)', group: 'Particle', desc: 'Cycles through Photoshop-style blend modes (0=Normal, 0.14=Screen, 0.28=Add, 0.43=Multiply, 0.57=Overlay, 0.71=Color Dodge, 0.86=Difference, 1=Luminosity). Map loudness to toggle from Screen to Add on peaks.' },
+    saturation: { label: 'Saturation', group: 'Particle', desc: 'Drives HSL saturation (0 = grey, 1 = full colour). Dissonance -> saturation desaturates clashing intervals toward grey.' },
+    alpha_mult: { label: 'Opacity x', group: 'Particle', desc: 'Multiplies particle alpha. 0 = invisible, 1 = fully opaque. Amplitude -> opacity fades quiet partials to nothing.' },
+    cx_offset: { label: 'Location X', group: 'Particle', desc: 'Horizontal canvas offset (0-1 = +/- half canvas width). Stereo pan -> X offset creates a physically accurate stereo spread left/right.' },
+    cy_offset: { label: 'Location Y', group: 'Particle', desc: 'Vertical canvas offset (0-1 = +/- half canvas height). Frequency -> Y builds a visual spectrum-analyser strip.' },
+    z_offset: { label: 'Location Z', group: 'Particle', desc: 'Depth offset in 3-D mode (0-1 = +/- half depth range). Age -> Z sends older partials deeper, creating a time-tunnel effect.' },
+    speed_mult: { label: 'Speed x', group: 'Particle', desc: 'Multiplies particle movement / animation speed. Amplitude -> speed makes peaks energetic; low values freeze particles for ambient textures.' },
+    spread_mult: { label: 'Spread x', group: 'Particle', desc: 'Multiplies the spatial scatter radius around the base position. 0 = tightly clustered; 2 = twice as scattered. Dissonance -> spread visually loosens harmonically dense passages.' },
+    lightness: { label: 'Brightness', group: 'Particle', desc: 'Drives HSL lightness (0 = black, 0.5 = true colour, 1 = white). Amplitude -> brightness makes loud notes glow.' },
+    blur_add: { label: 'Blur / Sharpness', group: 'Particle', desc: 'Adds gaussian blur (0-1 = 0-16 px). 0 = razor-sharp; 1 = heavily blurred halo. Timbre -> blur makes bright tones crisp and dark tones soft.' },
+    // ── PHYSICS ───────────────────────────────────────────────────────────────
+    wind: { label: 'Wind', group: 'Physics', desc: 'Horizontal drift force on particles (0-1 = calm to gale-force). Map stereo pan -> wind to sweep the mix across the canvas like a physical wind from left to right.' },
+    waves: { label: 'Waves', group: 'Physics', desc: 'Sinusoidal wave force perpendicular to motion (0 = still, 1 = max amplitude). Bass -> waves creates a rolling low-frequency visual swell.' },
+    gravity: { label: 'Gravity', group: 'Physics', desc: 'Downward pull force (0 = weightless, 1 = strong gravity). Kick-drum energy -> gravity makes particles fall like rain after each beat.' },
+    antigravity: { label: 'Anti-gravity / Explosion', group: 'Physics', desc: 'Upward/outward burst AND energy injection (spawns extra particles). 0 = none; 1 = violent explosion radiating outward. Map RMS peaks to create big-bang moments on loud drops.' },
+    fission: { label: 'Fission (Particle Split)', group: 'Physics', desc: 'Probability each particle splits into two smaller particles per frame (0 = never, 1 = always). High dissonance -> fission shatters stable tones into chaotic clouds.' },
+    fusion: { label: 'Fusion (Particle Merge)', group: 'Physics', desc: 'Attraction force pulling nearby particles together to merge into one larger particle (0 = no fusion, 1 = strong pull). Consonance -> fusion unifies harmonic overtones into a single glowing mass.' },
+    // ── CAMERA ────────────────────────────────────────────────────────────────
+    camera_zoom: { label: 'Camera FOV', group: 'Camera', desc: 'Drives camera field-of-view (0 = max telephoto zoom-in, 1 = wide-angle). Map bass energy to push-in on heavy hits.' },
+    camera_distance: { label: 'Camera Distance', group: 'Camera', desc: 'Orbit radius — how far the camera sits from the origin (0 = deep inside, 1 = far back). BPM -> distance creates a tempo-locked dive.' },
+    camera_azimuth: { label: 'Camera H-Revolution', group: 'Camera', desc: 'Horizontal orbit angle around origin (0–1 = 0–360°). Stereo pan → azimuth sweeps the camera left/right around the scene.' },
+    camera_elevation: { label: 'Camera V-Revolution', group: 'Camera', desc: 'Vertical orbit angle (0–1 = −89° to +89°). Frequency → elevation lifts the camera from bass floor to treble ceiling.' },
+    camera_speed: { label: 'Camera Speed x', group: 'Camera', desc: 'Multiplies all camera movement velocities (0 = frozen, 1 = normal, 2 = double). RMS → speed makes the camera rush during loud passages.' },
 }
+
+/** VISUAL_OUTPUTS grouped by category for optgroup rendering in the output select. */
+export const VISUAL_OUTPUT_GROUPS = (() => {
+    const order = ['Particle', 'Physics', 'Camera']
+    const map = {}
+    for (const [key, def] of Object.entries(VISUAL_OUTPUTS)) {
+        const g = def.group || 'Particle'
+        if (!map[g]) map[g] = []
+        map[g].push({ value: key, label: def.label, desc: def.desc })
+    }
+    return order.filter(g => map[g]).map(g => ({ group: g, options: map[g] }))
+})()
 
 export const OUTPUT_MODES = {
     multiply: { label: 'x', desc: 'Multiply existing value' },
@@ -110,7 +145,11 @@ function _readInput(rule, particle, frame) {
         case 'amplitude': return _clamp(particle.amplitude ?? 0, 0, 1)
         case 'frequency': return _clamp(particle.freqNorm ?? 0, 0, 1)
         case 'pan': return _clamp(((particle.pan ?? 0) + 1) / 2, 0, 1)
+        case 'stereo': return _clamp(Math.abs(particle.pan ?? 0), 0, 1)  // |pan| → 0 = centre, 1 = hard panned
         case 'age': return _clamp((particle.age ?? 0) / 5, 0, 1)
+        case 'timbre': return _clamp(particle.timbre ?? particle.clarity ?? 0, 0, 1)
+        case 'inst_percussive': return _clamp(particle.percussive ?? 0, 0, 1)
+        case 'inst_sustain': return _clamp(1 - (particle.percussive ?? 0), 0, 1)
         case 'clarity': return _clamp(particle.clarity ?? 1, 0, 1)
         case 'dissonance': return _clamp(particle.dissonance ?? 0, 0, 1)
         case 'rms': return _clamp(frame.rms ?? 0, 0, 1)

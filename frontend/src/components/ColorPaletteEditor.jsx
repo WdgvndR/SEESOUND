@@ -54,50 +54,57 @@ function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)) }
 
 // ── HLS ↔ RGB (matching Python colorsys, h/l/s in 0–1) ───────────────────
 
-function rgbToHls(r, g, b) {
-    const rn = r / 255, gn = g / 255, bn = b / 255
-    const mx = Math.max(rn, gn, bn), mn = Math.min(rn, gn, bn)
-    const l = (mx + mn) / 2
-    if (mx === mn) return [0, l, 0]   // achromatic
-    const d = mx - mn
-    const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn)
-    let h
-    switch (mx) {
-        case rn: h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6; break
-        case gn: h = ((bn - rn) / d + 2) / 6; break
-        default: h = ((rn - gn) / d + 4) / 6; break
-    }
-    return [h, l, s]
-}
+/**
+ * Adjusts an RGB color to a specific perceptual luminance while preserving hue.
+ * @param {number} r - Original Red (0-255)
+ * @param {number} g - Original Green (0-255)
+ * @param {number} b - Original Blue (0-255)
+ * @param {number} targetLuma - Target grayscale value (0-255)
+ * @returns {number[]} [newR, newG, newB]
+ */
+function matchLuminance(r, g, b, targetLuma) {
+    const currentLuma = 0.299 * r + 0.587 * g + 0.114 * b
 
-function hlsToRgb(h, l, s) {
-    if (s === 0) { const v = Math.round(l * 255); return [v, v, v] }
-    const p2 = l <= 0.5 ? l * (1 + s) : l + s - l * s
-    const p1 = 2 * l - p2
-    function _v(p1, p2, hue) {
-        hue = ((hue % 1) + 1) % 1
-        if (hue < 1 / 6) return p1 + (p2 - p1) * 6 * hue
-        if (hue < 0.5) return p2
-        if (hue < 2 / 3) return p1 + (p2 - p1) * (2 / 3 - hue) * 6
-        return p1
+    // Handle pure black input to avoid division by zero
+    if (currentLuma === 0) {
+        return [targetLuma, targetLuma, targetLuma]
     }
+
+    const ratio = targetLuma / currentLuma
+
+    // Scale the RGB values
+    let rScaled = r * ratio
+    let gScaled = g * ratio
+    let bScaled = b * ratio
+
+    const maxChannel = Math.max(rScaled, gScaled, bScaled)
+
+    // If scaling pushes the color out of bounds, desaturate toward target gray
+    if (maxChannel > 255) {
+        const correctionRatio = (255 - targetLuma) / (maxChannel - targetLuma)
+        rScaled = targetLuma + correctionRatio * (rScaled - targetLuma)
+        gScaled = targetLuma + correctionRatio * (gScaled - targetLuma)
+        bScaled = targetLuma + correctionRatio * (bScaled - targetLuma)
+    }
+
+    // Clamp bottom end just in case, and round to integers
     return [
-        clamp(Math.round(_v(p1, p2, h + 1 / 3) * 255), 0, 255),
-        clamp(Math.round(_v(p1, p2, h) * 255), 0, 255),
-        clamp(Math.round(_v(p1, p2, h - 1 / 3) * 255), 0, 255),
+        Math.max(0, Math.round(rScaled)),
+        Math.max(0, Math.round(gScaled)),
+        Math.max(0, Math.round(bScaled)),
     ]
 }
 
 /**
  * Build a 120-entry frequency color table from 12 base note colors.
- * For each octave the hue/saturation come from the base color;
- * lightness is interpolated linearly from lightnessMin (oct 0) to
- * lightnessMax (oct 9), so low notes are dark and high notes are bright.
+ * For each octave the hue is preserved and perceptual luminance is matched
+ * to a target linearly interpolated from lMin×255 (oct 0) to lMax×255 (oct 9),
+ * so low notes appear darker and high notes appear brighter.
  *
  * @param {object} noteColors  { C:[r,g,b], 'C#':[r,g,b], … }
  * @param {'rgb'|'hsv'} mode
- * @param {number} lMin        HSL lightness for octave 0  (0–1)
- * @param {number} lMax        HSL lightness for octave 9  (0–1)
+ * @param {number} lMin        Target luminance fraction for octave 0  (0–1)
+ * @param {number} lMax        Target luminance fraction for octave 9  (0–1)
  * @param {number} nOctaves    default 10 (C0 … B9)
  * @returns {object}           { "C0": [r,g,b], …, "B9": [r,g,b] }
  */
@@ -106,7 +113,7 @@ function calculateFreqColorTable(noteColors, mode = 'rgb', lMin = 0.20, lMax = 0
     const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     for (let oct = 0; oct < nOctaves; oct++) {
         const t = oct / Math.max(nOctaves - 1, 1)
-        const lightness = lMin + t * (lMax - lMin)
+        const targetLuma = (lMin + t * (lMax - lMin)) * 255
         for (const note of NOTES) {
             const raw = noteColors[note] || [128, 128, 128]
             let rgb
@@ -115,8 +122,7 @@ function calculateFreqColorTable(noteColors, mode = 'rgb', lMin = 0.20, lMax = 0
             } else {
                 rgb = [Math.round(raw[0]), Math.round(raw[1]), Math.round(raw[2])]
             }
-            const [h, , s] = rgbToHls(rgb[0], rgb[1], rgb[2])
-            table[`${note}${oct}`] = hlsToRgb(h, lightness, s)
+            table[`${note}${oct}`] = matchLuminance(rgb[0], rgb[1], rgb[2], targetLuma)
         }
     }
     return table
@@ -415,7 +421,7 @@ export default function ColorPaletteEditor({
                 aria-expanded={open}
             >
                 <span className="param-group-chevron">{open ? '▾' : '▸'}</span>
-                <span>Note Color Palette</span>
+                <span>🎨 Colors & Palette</span>
                 <span className="param-group-count">12</span>
             </button>
 

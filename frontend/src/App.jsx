@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useNodesState, useEdgesState, addEdge as rfAddEdge } from '@xyflow/react'
+import { useNodesState, useEdgesState } from '@xyflow/react'
 import { useWebSocket } from './hooks/useWebSocket'
 import ParameterPanel from './components/ParameterPanel'
 import StatusBar from './components/StatusBar'
 import MusicPlayer from './components/MusicPlayer'
 import FrequencyMonitor from './components/FrequencyMonitor'
 import { getDefaultParams, applyDisabled, loadDisabledParams, saveDisabledParams } from './config/params'
+import { loadMappings, saveMappings, makeGroup } from './components/CustomMappingEditor'
 import { RenderEngine } from './engine/RenderEngine'
 import { ThreeEngine } from './engine/ThreeEngine'
 import { GraphEvaluator } from './engine/GraphEvaluator'
@@ -16,6 +17,7 @@ const API_BASE = 'http://localhost:8000'
 export default function App() {
     // ── Refs declared first (so the WS callback can close over them) ──────
     const canvasRef = useRef(null)
+    const threeContainerRef = useRef(null)   // <div> for Three.js renderer
     const engineRef = useRef(null)
     const audioRef = useRef(null)   // HTMLAudioElement, shared with MusicPlayer
     const paramsRef = useRef(getDefaultParams())  // always-fresh params
@@ -37,8 +39,6 @@ export default function App() {
     const isBufferingRef = useRef(false)    // true when playback is ahead of analysis
     const jobStatusRef = useRef(null)       // mirror of jobStatus state for rAF closures
     const jobIdRef = useRef(null)           // mirror of jobId state for interval/rAF closures
-    const threeEngineRef = useRef(null)     // Three.js engine (layout mode 8 only)
-    const threeContainerRef = useRef(null)  // container div for WebGL canvas
 
     // ── Binary-search for the closest frame at or before `t` seconds ─────
     function findFrameAt(t) {
@@ -65,9 +65,14 @@ export default function App() {
             // position yet, pause audio and enter buffering state.
             // The frame-arrival handler auto-resumes when enough frames catch up.
             const frontier = analysisFrontierRef.current
-            if (frontier >= 0 && jobStatusRef.current === 'running' && t > frontier + 0.5) {
+            if (frontier >= 0 && jobStatusRef.current === 'running' && t > frontier + 3.0) {
                 isBufferingRef.current = true
                 setIsBuffering(true)
+                // Immediately tell the backend the current position so it
+                // advances the analysis frontier without waiting for the next
+                // 1-second heartbeat (which stops when audio is paused).
+                const jId = jobIdRef.current
+                if (jId) sendMessage({ type: 'playback_time', payload: { job_id: jId, time: t } })
                 audio.pause()   // fires 'pause' → onPause → stopPlaybackLoop
                 playRafRef.current = null
                 return
@@ -75,12 +80,7 @@ export default function App() {
 
             const frame = findFrameAt(t)
             if (frame && frame.time_seconds !== lastRenderedTimeRef.current) {
-                const _p = applyDisabled(paramsRef.current, disabledKeysRef.current)
-                if (paramsRef.current.layoutMode === 8) {
-                    threeEngineRef.current?.renderFrame(frame, _p, t, audio.duration || 0)
-                } else {
-                    engineRef.current?.renderFrame(frame, _p, t, audio.duration || 0)
-                }
+                engineRef.current?.renderFrame(frame, applyDisabled(paramsRef.current, disabledKeysRef.current), t, audio.duration || 0)
                 lastRenderedTimeRef.current = frame.time_seconds
                 latestFrameRef.current = frame
                 if (!rafPendingRef.current) {
@@ -88,9 +88,7 @@ export default function App() {
                     requestAnimationFrame(() => {
                         rafPendingRef.current = false
                         setCurrentFrame(latestFrameRef.current)
-                        const _activeEng = paramsRef.current.layoutMode === 8
-                            ? threeEngineRef.current : engineRef.current
-                        setFps(Math.round(_activeEng?.fps || 0))
+                        setFps(Math.round(engineRef.current?.fps || 0))
                     })
                 }
             }
@@ -111,13 +109,8 @@ export default function App() {
         const audio = audioRef.current
         if (audio && !audio.paused) return
         const frame = findFrameAt(t)
-        if (frame) {
-            const _p = applyDisabled(paramsRef.current, disabledKeysRef.current)
-            if (paramsRef.current.layoutMode === 8) {
-                threeEngineRef.current?.renderFrame(frame, _p, t, audio?.duration || 0)
-            } else if (engineRef.current) {
-                engineRef.current.renderFrame(frame, _p, t, audio?.duration || 0)
-            }
+        if (frame && engineRef.current) {
+            engineRef.current.renderFrame(frame, applyDisabled(paramsRef.current, disabledKeysRef.current), t, audio?.duration || 0)
             lastRenderedTimeRef.current = frame.time_seconds
             setCurrentFrame(frame)
         }
@@ -144,7 +137,6 @@ export default function App() {
         const syncDur = () => {
             if (!isNaN(audio.duration) && audio.duration > 0) {
                 engineRef.current?.setTrackDuration(audio.duration)
-                threeEngineRef.current?.setTrackDuration(audio.duration)
             }
         }
         audio.addEventListener('loadedmetadata', syncDur)
@@ -167,15 +159,21 @@ export default function App() {
     disabledKeysRef.current = disabledKeys  // always-fresh ref for rAF tick
     const [panelCollapsed, setPanelCollapsed] = useState(false)
 
+    // ── Custom mapping groups (lifted from CustomMappingEditor) ───────────
+    const [customMappingGroups, setCustomMappingGroups] = useState(() => loadMappings() || [makeGroup()])
+    const handleMappingGroupsChange = useCallback((next) => {
+        setCustomMappingGroups(next)
+        saveMappings(next)
+    }, [])
+
     // ── Node graph state ──────────────────────────────────────────────────
     const [activePanel, setActivePanel] = useState('params')
-    const [nodes, setNodes, onNodesChange] = useNodesState([])
-    const [edges, setEdges, onEdgesChange] = useEdgesState([])
+    const [nodes, setNodes] = useNodesState([])
+    const [edges, setEdges] = useEdgesState([])
     const graphEvalRef = useRef(null)
 
     const handleClear = useCallback(() => {
         engineRef.current?.clear()
-        threeEngineRef.current?.clear()
     }, [])
 
     const handleToggleDisabled = useCallback((key) => {
@@ -189,21 +187,28 @@ export default function App() {
         requestAnimationFrame(() => renderAtTime(audioRef.current?.currentTime ?? 0))
     }, [renderAtTime])
 
-    const handlePresetLoad = useCallback(({ params: presetParams, nodes: presetNodes = [], edges: presetEdges = [], mappingGroups: presetMappingGroups } = {}) => {
+    const handlePresetLoad = useCallback(({ params: presetParams, disabledKeys: presetDisabledKeys, mappingGroups: presetMappingGroups } = {}) => {
         if (!presetParams) return
         // Merge loaded preset with current defaults so any new fields
         // (e.g. freqColorTable, lightnessMin from old presets) are filled in.
         const merged = { ...getDefaultParams(), ...presetParams }
         setParams(merged)
         paramsRef.current = merged
-        // Restore node graph if included in preset
-        setNodes(presetNodes)
-        setEdges(presetEdges)
-        // Restore mapping groups if included in preset
-        if (Array.isArray(presetMappingGroups)) setMappingGroups(presetMappingGroups)
+        // Restore disabled keys if included in preset
+        if (Array.isArray(presetDisabledKeys)) {
+            const newDisabled = new Set(presetDisabledKeys)
+            setDisabledKeys(newDisabled)
+            disabledKeysRef.current = newDisabled
+            saveDisabledParams([...newDisabled])
+        }
+        // Restore custom mapping groups if included in preset
+        if (Array.isArray(presetMappingGroups) && presetMappingGroups.length > 0) {
+            setCustomMappingGroups(presetMappingGroups)
+            saveMappings(presetMappingGroups)
+        }
         if (status === 'open') sendMessage({ type: 'params', payload: merged })
         renderAtTime(audioRef.current?.currentTime ?? 0)
-    }, [status, sendMessage, renderAtTime, setNodes, setEdges])
+    }, [status, sendMessage, renderAtTime])
 
     // ── Job / playback state ──────────────────────────────────────────────
     const [audioFile, setAudioFile] = useState(null)
@@ -220,26 +225,44 @@ export default function App() {
     const [isPaintQueued, setIsPaintQueued] = useState(false)
     const [isRecording, setIsRecording] = useState(false)
     const [isBuffering, setIsBuffering] = useState(false)
-    const [mappingGroups, setMappingGroups] = useState([])
 
-    // Sync jobStatusRef so the rAF tick can read current status without stale closures
-    useEffect(() => { jobStatusRef.current = jobStatus }, [jobStatus])
-    // Sync jobIdRef so the playback-time interval always sends the correct job id
-    useEffect(() => { jobIdRef.current = jobId }, [jobId])
+    // Sync jobStatusRef so the rAF tick can read current status without stale closures.
+    // NOTE: these are also updated eagerly (synchronously) at every setJobStatus/setJobId
+    // call site below so the rAF never sees a stale value during a React render cycle.
 
     // Report playback position to the backend every second while the audio is
-    // playing.  The backend uses this to throttle analysis to LOOKAHEAD_S ahead
-    // of the current position so analysis of the whole file isn't front-loaded.
+    // playing.  Also fires while buffering so the backend keeps advancing analysis
+    // even when audio is paused (prevents the frontier-stall deadlock).
     useEffect(() => {
         const iv = setInterval(() => {
             const audio = audioRef.current
-            if (!audio || audio.paused) return
             const j = jobIdRef.current
             if (!j) return
-            sendMessage({ type: 'playback_time', payload: { job_id: j, time: audio.currentTime } })
+            // Send heartbeat when playing OR when buffering (audio paused by us)
+            if (audio && (!audio.paused || isBufferingRef.current)) {
+                sendMessage({ type: 'playback_time', payload: { job_id: j, time: audio.currentTime } })
+            }
         }, 1000)
         return () => clearInterval(iv)
     }, [sendMessage])
+
+    // Safety timeout: if buffering is stuck for more than 10 s with no new
+    // frames arriving, force-clear it so the user can at least seek or retry.
+    const bufferingTimeoutRef = useRef(null)
+    useEffect(() => {
+        if (isBuffering) {
+            bufferingTimeoutRef.current = setTimeout(() => {
+                if (isBufferingRef.current) {
+                    console.warn('[SEESOUND] Buffering timeout — clearing stuck state')
+                    isBufferingRef.current = false
+                    setIsBuffering(false)
+                }
+            }, 10_000)
+        } else {
+            clearTimeout(bufferingTimeoutRef.current)
+        }
+        return () => clearTimeout(bufferingTimeoutRef.current)
+    }, [isBuffering])
 
     // ── Incoming frame handler: store frames, rendering driven by playback loop
     wsHandlerRef.current = (msg) => {
@@ -274,43 +297,73 @@ export default function App() {
     }
 
     // ── Canvas + engine ────────────────────────────────────────────────────
+    // Track whether we are currently in 3D mode to avoid redundant swaps.
+    const is3dRef = useRef(false)
+
+    // Callback forwarded to ThreeEngine so mouse camera overrides sync sliders.
+    // Using a ref so it's always fresh even if ThreeEngine was created earlier.
+    const handleCameraParamsRef = useRef(null)
+    handleCameraParamsRef.current = useCallback((az, el, dist) => {
+        setParams(prev => ({
+            ...prev,
+            cameraAzimuth: az,
+            cameraElevation: el,
+            cameraDistance: dist,
+        }))
+        paramsRef.current = { ...paramsRef.current, cameraAzimuth: az, cameraElevation: el, cameraDistance: dist }
+    }, [])
+
     useEffect(() => {
-        if (canvasRef.current && !engineRef.current) {
-            engineRef.current = new RenderEngine(canvasRef.current)
-            // Wire graph evaluator immediately on engine creation
-            if (graphEvalRef.current) {
-                engineRef.current.setGraphEvaluator(graphEvalRef.current)
+        const layoutMode = params.layoutMode ?? 0
+        const need3d = layoutMode >= 3
+
+        if (need3d !== is3dRef.current) {
+            // Mode boundary crossed — destroy old engine, build new
+            engineRef.current?.destroy()
+            engineRef.current = null
+            is3dRef.current = need3d
+        }
+
+        if (need3d) {
+            if (!engineRef.current && threeContainerRef.current) {
+                engineRef.current = new ThreeEngine(threeContainerRef.current)
+                engineRef.current.onCameraChange = (az, el, dist) => handleCameraParamsRef.current?.(az, el, dist)
+            }
+        } else {
+            if (!engineRef.current && canvasRef.current) {
+                engineRef.current = new RenderEngine(canvasRef.current)
+                if (graphEvalRef.current) {
+                    engineRef.current.setGraphEvaluator(graphEvalRef.current)
+                }
+            }
+        }
+
+        return () => {
+            // Only destroy on unmount (not on every layoutMode change — handled above)
+        }
+    }, [params.layoutMode])  // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Initial engine creation on first mount
+    useEffect(() => {
+        if (!engineRef.current) {
+            const layoutMode = params.layoutMode ?? 0
+            if (layoutMode >= 3 && threeContainerRef.current) {
+                is3dRef.current = true
+                engineRef.current = new ThreeEngine(threeContainerRef.current)
+                engineRef.current.onCameraChange = (az, el, dist) => handleCameraParamsRef.current?.(az, el, dist)
+            } else if (canvasRef.current) {
+                is3dRef.current = false
+                engineRef.current = new RenderEngine(canvasRef.current)
+                if (graphEvalRef.current) {
+                    engineRef.current.setGraphEvaluator(graphEvalRef.current)
+                }
             }
         }
         return () => {
             engineRef.current?.destroy()
             engineRef.current = null
-            threeEngineRef.current?.destroy()
-            threeEngineRef.current = null
         }
-    }, [])
-
-    // ── Three.js engine lifecycle: create/destroy when switching to/from mode 8 ──
-    useEffect(() => {
-        if (params.layoutMode === 8) {
-            if (!threeEngineRef.current && threeContainerRef.current) {
-                try {
-                    threeEngineRef.current = new ThreeEngine(threeContainerRef.current)
-                    // Sync track duration if already known
-                    const dur = audioRef.current?.duration
-                    if (dur && dur > 0) threeEngineRef.current.setTrackDuration(dur)
-                } catch (err) {
-                    console.error('[App] ThreeEngine init failed:', err)
-                    threeEngineRef.current = null
-                }
-            }
-        } else {
-            if (threeEngineRef.current) {
-                threeEngineRef.current.destroy()
-                threeEngineRef.current = null
-            }
-        }
-    }, [params.layoutMode])
+    }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Compile & wire graph evaluator whenever nodes/edges change ────────
     useEffect(() => {
@@ -323,10 +376,7 @@ export default function App() {
     }, [nodes, edges])
 
     useEffect(() => {
-        const onResize = () => {
-            engineRef.current?.resize()
-            threeEngineRef.current?.resize()
-        }
+        const onResize = () => engineRef.current?.resize()
         window.addEventListener('resize', onResize)
         return () => window.removeEventListener('resize', onResize)
     }, [])
@@ -344,6 +394,8 @@ export default function App() {
             if (!msg?.type) continue
             switch (msg.type) {
                 case 'job_started':
+                    jobIdRef.current = msg.payload?.job_id
+                    jobStatusRef.current = 'running'
                     setJobId(msg.payload?.job_id)
                     setJobStatus('running')
                     // Reset frame store & canvas for the new job
@@ -354,7 +406,6 @@ export default function App() {
                     setCurrentFrame(null)
                     setFrameCount(0)
                     engineRef.current?.clear()
-                    threeEngineRef.current?.clear()
                     // Reset buffering state for new job
                     analysisFrontierRef.current = -1
                     isBufferingRef.current = false
@@ -367,6 +418,7 @@ export default function App() {
                     setPaintProgress(0)
                     break
                 case 'analysis_done':
+                    jobStatusRef.current = 'done'
                     setJobStatus('done')
                     setFrameCount(frameCountRef.current)
                     // Clear any lingering buffering state — analysis is fully complete
@@ -386,14 +438,17 @@ export default function App() {
                         startPaintRef.current?.()
                     }
                     break
-                case 'error':
-                    setJobStatus('error: ' + (msg.message || 'unknown error'))
+                case 'error': {
+                    const errMsg = 'error: ' + (msg.message || 'unknown error')
+                    jobStatusRef.current = errMsg
+                    setJobStatus(errMsg)
                     // If buffering, clear state so the player isn't left frozen
                     if (isBufferingRef.current) {
                         isBufferingRef.current = false
                         setIsBuffering(false)
                     }
                     break
+                }
                 case 'progress':
                     // Backend heartbeat every 500 frames — update live counter
                     setFrameCount(msg.frame_count ?? frameCountRef.current)
@@ -430,7 +485,6 @@ export default function App() {
         frameCountRef.current = 0
         lastRenderedTimeRef.current = -1
         engineRef.current?.clear()
-        threeEngineRef.current?.clear()
         setAudioFile(file)
         setCurrentFrame(null)
         setFrameCount(0)
@@ -440,11 +494,13 @@ export default function App() {
             const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: form })
             const data = await res.json()
             if (data.job_id) {
+                jobStatusRef.current = 'starting'
                 setJobStatus('starting')
                 sendMessage({ type: 'subscribe', payload: { job_id: data.job_id } })
             }
         } catch (err) {
             console.error('Upload failed:', err)
+            jobStatusRef.current = 'error'
             setJobStatus('error')
         }
     }, [sendMessage, stopPlaybackLoop])
@@ -546,8 +602,9 @@ export default function App() {
             return
         }
 
-        const canvas = (paramsRef.current.layoutMode === 8 && threeEngineRef.current)
-            ? threeEngineRef.current.renderer.domElement
+        // Use the correct canvas based on layout mode
+        const canvas = paramsRef.current.layoutMode >= 3
+            ? threeContainerRef.current?.querySelector('canvas')
             : canvasRef.current
         if (!canvas) return
 
@@ -607,45 +664,95 @@ export default function App() {
         a.click()
     }, [audioFile])
 
-    // ── Save canvas as PNG ─────────────────────────────────────────────
-    const handleSave = useCallback(() => {
-        // In 3D mode use the WebGL canvas from the ThreeEngine renderer
-        const canvas = (paramsRef.current.layoutMode === 8 && threeEngineRef.current)
-            ? threeEngineRef.current.renderer.domElement
-            : canvasRef.current
-        if (!canvas) return
-        const url = canvas.toDataURL('image/png')
+    // ── Save Project ────────────────────────────────────────────────────
+    const handleSaveProject = useCallback(() => {
+        const project = {
+            version: 1,
+            savedAt: new Date().toISOString(),
+            audioFileName: audioFile ? audioFile.name : null,
+            canvasW,
+            canvasH,
+            params,
+            disabledKeys: [...disabledKeys],
+            mappingGroups: customMappingGroups,
+        }
+        const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         const stem = audioFile ? audioFile.name.replace(/\.[^.]+$/, '') : 'seesound'
         a.href = url
+        a.download = stem + '.seesound'
+        a.click()
+        URL.revokeObjectURL(url)
+    }, [audioFile, canvasW, canvasH, params, disabledKeys, customMappingGroups])
+
+    // ── Load Project ────────────────────────────────────────────────────
+    const projectInputRef = useRef(null)
+    const handleLoadProjectFile = useCallback((e) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        const reader = new FileReader()
+        reader.onload = (ev) => {
+            try {
+                const project = JSON.parse(ev.target.result)
+                // Restore params
+                if (project.params) {
+                    const merged = { ...getDefaultParams(), ...project.params }
+                    setParams(merged)
+                    paramsRef.current = merged
+                    if (status === 'open') sendMessage({ type: 'params', payload: merged })
+                }
+                // Restore canvas size
+                if (project.canvasW) setCanvasW(project.canvasW)
+                if (project.canvasH) setCanvasH(project.canvasH)
+                // Restore disabled keys
+                if (Array.isArray(project.disabledKeys)) {
+                    const newDisabled = new Set(project.disabledKeys)
+                    setDisabledKeys(newDisabled)
+                    disabledKeysRef.current = newDisabled
+                    saveDisabledParams([...newDisabled])
+                }
+                // Restore custom mapping groups
+                if (Array.isArray(project.mappingGroups) && project.mappingGroups.length > 0) {
+                    setCustomMappingGroups(project.mappingGroups)
+                    saveMappings(project.mappingGroups)
+                }
+                renderAtTime(audioRef.current?.currentTime ?? 0)
+                if (project.audioFileName) {
+                    alert(`Project loaded.\n\nAudio file: "${project.audioFileName}"\nPlease re-load the audio file manually.`)
+                }
+            } catch (err) {
+                alert('Failed to load project file: ' + err.message)
+            }
+        }
+        reader.readAsText(file)
+        // Reset so same file can be re-loaded
+        e.target.value = ''
+    }, [status, sendMessage, renderAtTime])
+
+    // ── Save canvas as PNG ─────────────────────────────────────────────
+    const handleSave = useCallback(() => {
+        const stem = audioFile ? audioFile.name.replace(/\.[^.]+$/, '') : 'seesound'
+        let url
+        if (params.layoutMode >= 3) {
+            // 3D mode: capture from ThreeEngine's WebGL canvas
+            const el = threeContainerRef.current?.querySelector('canvas')
+            url = el ? el.toDataURL('image/png') : null
+        } else {
+            url = canvasRef.current ? canvasRef.current.toDataURL('image/png') : null
+        }
+        if (!url) return
+        const a = document.createElement('a')
+        a.href = url
         a.download = stem + '_' + canvasW + 'x' + canvasH + '.png'
         a.click()
-    }, [audioFile, canvasW, canvasH])
+    }, [audioFile, canvasW, canvasH, params.layoutMode])
 
     // ── Stop job ─────────────────────────────────────────────────────────
     const handleStop = useCallback(() => {
         sendMessage({ type: 'stop', payload: { job_id: jobId } })
     }, [sendMessage, jobId])
 
-    // ── Node graph handlers ───────────────────────────────────────────────
-    const handleConnect = useCallback((params) => {
-        setEdges(eds => rfAddEdge({ ...params, animated: true, style: { stroke: '#4d7fa8', strokeWidth: 2 } }, eds))
-    }, [setEdges])
-
-    const handleUpdateNode = useCallback((id, newData) => {
-        setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...newData, onChange: undefined, onDelete: undefined } } : n))
-    }, [setNodes])
-
-    const handleAddNode = useCallback((nodeObj) => {
-        // Strip injected callbacks before storing
-        const { data: { onChange: _oc, onDelete: _od, ...restData } = {}, ...rest } = nodeObj
-        setNodes(nds => [...nds, { ...rest, data: restData }])
-    }, [setNodes])
-
-    const handleDeleteNode = useCallback((id) => {
-        setNodes(nds => nds.filter(n => n.id !== id))
-        setEdges(eds => eds.filter(e => e.source !== id && e.target !== id))
-    }, [setNodes, setEdges])
 
     // ─────────────────────────────────────────────────────────────────────
     return (
@@ -665,16 +772,8 @@ export default function App() {
                 onPresetLoad={handlePresetLoad}
                 activeTab={activePanel}
                 onTabChange={setActivePanel}
-                currentNodes={nodes}
-                currentEdges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={handleConnect}
-                onUpdateNode={handleUpdateNode}
-                onAddNode={handleAddNode}
-                onDeleteNode={handleDeleteNode}
-                mappingGroups={mappingGroups}
-                onMappingGroupsChange={setMappingGroups}
+                mappingGroups={customMappingGroups}
+                onMappingGroupsChange={handleMappingGroupsChange}
             />
 
             <main className="main-area">
@@ -696,26 +795,18 @@ export default function App() {
                     isBuffering={isBuffering}
                 />
 
-                {/* 2-D Canvas (modes 0-7) */}
-                <div className="canvas-container" style={{ display: params.layoutMode === 8 ? 'none' : undefined }}>
+                {/* Canvas (2D layouts 0-2) / Three.js container (3D layouts 3-6) */}
+                <div className="canvas-container">
                     <canvas ref={canvasRef} className="render-canvas"
-                        style={{ width: canvasW + 'px', height: canvasH + 'px' }} />
-                </div>
-
-                {/* Three.js 3D Canvas (mode 8 – Deep Space) */}
-                <div className="canvas-container" style={{ display: params.layoutMode !== 8 ? 'none' : undefined }}>
-                    <div
-                        ref={threeContainerRef}
                         style={{
-                            width: canvasW + 'px',
-                            height: canvasH + 'px',
-                            position: 'relative',
-                            overflow: 'hidden',
-                            borderRadius: '6px',
-                            flexShrink: 0,
-                            background: '#060608',
-                        }}
-                    />
+                            width: canvasW + 'px', height: canvasH + 'px',
+                            display: params.layoutMode >= 3 ? 'none' : 'block',
+                        }} />
+                    <div ref={threeContainerRef} className="three-container"
+                        style={{
+                            width: canvasW + 'px', height: canvasH + 'px',
+                            display: params.layoutMode >= 3 ? 'block' : 'none',
+                        }} />
                 </div>
 
                 {/* Canvas toolbar: resize + save */}
@@ -743,7 +834,7 @@ export default function App() {
                     <button className="canvas-save-btn" onClick={handleSave} title="Save canvas as PNG">
                         ↓ Save PNG
                     </button>
-                    {params.layoutMode === 4 && (
+                    {(params.layoutMode === 1 || params.layoutMode === 6) && (
                         <button className="canvas-save-btn" onClick={handleSaveLSystem} title="Save full L-System tree as PNG at its natural bounding box (no clipping)">
                             ↓ Save L-System
                         </button>
@@ -755,6 +846,23 @@ export default function App() {
                     >
                         {isRecording ? '⏹ Stop · Save' : '⏺ Record'}
                     </button>
+                    <span className="canvas-tb-sep canvas-tb-sep-tall">|</span>
+                    <button className="canvas-save-btn project-save-btn" onClick={handleSaveProject}
+                        title="Save project — all settings, canvas size, custom rules — as .seesound file">
+                        💾 Save Project
+                    </button>
+                    <button className="canvas-save-btn project-load-btn"
+                        onClick={() => projectInputRef.current?.click()}
+                        title="Load a .seesound project file">
+                        📂 Load Project
+                    </button>
+                    <input
+                        ref={projectInputRef}
+                        type="file"
+                        accept=".seesound,.json"
+                        style={{ display: 'none' }}
+                        onChange={handleLoadProjectFile}
+                    />
                 </div>
 
                 <StatusBar

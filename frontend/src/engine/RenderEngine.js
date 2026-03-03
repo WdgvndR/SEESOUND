@@ -52,10 +52,7 @@ export class RenderEngine {
         this.h = 0
         this.trackDuration = 0       // set via setTrackDuration() for painting mode
         this.lastModeKey = ''         // detect mode switches to wipe canvas
-        this.lState = null            // L-System persistent state (mode 4)
-        this.vectorState = null       // Vector Interval state (mode 5)
-        this.gravityState = null      // Harmonic Gravity state (mode 6)
-        this.orbitalState = null      // Phase-Space Orbital state (mode 7)
+        this.lState = null            // L-System persistent state (mode 1)
         this._graphEval = null        // GraphEvaluator instance (node-graph layer)
         // Use ResizeObserver so we always know the real canvas CSS size
         this._ro = new ResizeObserver(function (entries) {
@@ -101,9 +98,6 @@ export class RenderEngine {
         this.frameCount = 0
         this.componentAges.clear()
         this.lState = null
-        this.vectorState = null
-        this.gravityState = null
-        this.orbitalState = null
     }
 
     setTrackDuration(dur) {
@@ -141,7 +135,7 @@ export class RenderEngine {
         // Darken-group modes look best on a light canvas; everything else on dark
         var isLightBg = blendMode === 'multiply' || blendMode === 'color-burn' || blendMode === 'darken'
 
-        // layoutMode:  0 = Circular (polar harmonic), 1 = Linear (time→X, log-freq→Y)
+        // layoutMode:  0 = Linear (time→X, log-freq→Y), 1 = L-System 2D, 2 = Circular (full-range)
         // persistMode:  0 = Momentary (fade/trail),    1 = Painting (marks persist forever)
         var layoutMode = (params.layoutMode != null) ? params.layoutMode : 0
         var persistMode = (params.persistMode != null) ? params.persistMode : 0
@@ -150,41 +144,26 @@ export class RenderEngine {
             ctx.clearRect(0, 0, w, h)  // wipe canvas whenever either mode changes
             if (this.accumulationCtx) this.accumulationCtx.clearRect(0, 0, w, h)
             this.lastModeKey = modeKey
-            if (layoutMode !== 4) this.lState = null
-            if (layoutMode !== 5) this.vectorState = null
-            if (layoutMode !== 6) this.gravityState = null
-            if (layoutMode !== 7) this.orbitalState = null
+            if (layoutMode !== 1) this.lState = null
         }
         if (persistMode === 0) {
             // Momentary: slow translucent fill creates trail/decay effect
-            ctx.fillStyle = isLightBg ? "rgba(245,242,235,0.05)" : "rgba(10,10,15,0.05)"
+            // For linear mode, respect linearTrailFade; for others default 0.05
+            var _trailAlpha = (layoutMode === 0 && params.linearTrailFade != null) ? params.linearTrailFade : 0.05
+            ctx.fillStyle = isLightBg
+                ? "rgba(245,242,235," + _trailAlpha + ")"
+                : "rgba(10,10,15," + _trailAlpha + ")"
             ctx.fillRect(0, 0, w, h)
         }
         // Painting (persistMode=1): no clearing — every mark is permanent
 
-        // ── Dispatch to specialised renderers for modes 2–7 ─────────────────
-        if (layoutMode === 2) {
-            this._renderChladni(ctx, w, h, components, params, blendMode, persistMode, isLightBg)
-            return
-        }
-        if (layoutMode === 3) {
-            this._renderOscilloscope(ctx, w, h, components, frame, params, blendMode, persistMode, isLightBg)
-            return
-        }
-        if (layoutMode === 4) {
+        // ── Dispatch to specialised renderers ─────────────────────────────────
+        if (layoutMode === 1) {
             this._renderLSystem(ctx, w, h, components, frame, params, blendMode, persistMode, isLightBg, time)
             return
         }
-        if (layoutMode === 5) {
-            this._renderVectorInterval(ctx, w, h, components, frame, params, blendMode, persistMode, isLightBg, time)
-            return
-        }
-        if (layoutMode === 6) {
-            this._renderHarmonicGravity(ctx, w, h, components, frame, params, blendMode, persistMode, isLightBg, time)
-            return
-        }
-        if (layoutMode === 7) {
-            this._renderPhaseOrbit(ctx, w, h, components, frame, params, blendMode, persistMode, isLightBg, time)
+        if (layoutMode === 2) {
+            this._renderCircular(ctx, w, h, components, frame, params, blendMode, persistMode, isLightBg, time)
             return
         }
 
@@ -257,7 +236,7 @@ export class RenderEngine {
             var freqLogNorm = clamp(Math.log2(Math.max(c.freq, 16) / 16) / Math.log2(1000), 0, 1)
 
             var cx, cy
-            if (layoutMode === 1) {
+            if (layoutMode === 0) {
                 // Linear mode: X = actual audio position (L→R), Y = log freq (bass=bottom, treble=top)
                 // trackDuration arg is passed from App (last frame time_seconds) — reliable fallback chain
                 var trackDur = (trackDuration && trackDuration > 1.0) ? trackDuration
@@ -288,23 +267,7 @@ export class RenderEngine {
                 cy += (rng() - 0.5) * entropyJitter * 2
             }
 
-            if (layoutMode === 0) {
-                var gravStr = params.chromaticGravity / 100
-                if (gravStr > 0.01) {
-                    cx = lerp(cx, w / 2, gravStr * 0.3)
-                    cy = lerp(cy, h / 2, gravStr * 0.3)
-                }
-
-                var magStr = params.magneticOrientation / 100
-                if (magStr > 0.01) {
-                    var mdx = cx - w / 2, mdy = cy - h / 2
-                    var mang = Math.atan2(mdy, mdx)
-                    var mdist = Math.hypot(mdx, mdy)
-                    var mbl = lerp(mang, 0, magStr * 0.2)
-                    cx = w / 2 + Math.cos(mbl) * mdist
-                    cy = h / 2 + Math.sin(mbl) * mdist
-                }
-            }
+            // (squircle / circular effects applied below for layoutMode === 2 in _renderCircular)
 
             var inputGain = (params.inputGain != null) ? params.inputGain : 1
             // Perceptual loudness: apply A-weighting so low/high freqs reflect perceived loudness
@@ -361,7 +324,7 @@ export class RenderEngine {
             var rgb = c.color_rgb || [200, 200, 200]
             var r = rgb[0], g = rgb[1], b = rgb[2]
             // Linear mode: override colour from the 120-entry freqColorTable (note+octave keys)
-            if (layoutMode === 1) {
+            if (layoutMode === 0) {
                 var _fct = params.freqColorTable
                 if (_fct) {
                     var _FCT_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -415,11 +378,7 @@ export class RenderEngine {
             if (params.sourceSeparation > 0.01) {
                 baseRadius *= lerp(1, 0.5 + clarityVal * 0.5, params.sourceSeparation / 100)
             }
-            if (layoutMode === 0 && params.interInstrumental > 0.01) {
-                var iw = (params.interInstrumental / 100) * dissonance * 0.15
-                cx = lerp(cx, w / 2, iw)
-                cy = lerp(cy, h / 2, iw)
-            }
+            // (inter-instrumental pull handled inside _renderCircular for mode 2)
 
             // ── Node-graph evaluation (modifier layer) ────────────────────────
             if (this._graphEval && this._graphEval.hasGraph) {
@@ -484,6 +443,144 @@ export class RenderEngine {
         ]
     }
 
+    // ── Mode 2: Circular — full-range log-spiral (all octaves) ──────────────
+    _renderCircular(ctx, w, h, components, frame, params, blendMode, persistMode, isLightBg, time) {
+        if (!components.length) return
+        var rmsDb = (frame.rms_db != null) ? frame.rms_db : -60
+        var rmsNorm = clamp((rmsDb + 60) / 60, 0, 1)
+        var bpm = (frame.bpm != null) ? frame.bpm : 120
+        var kineticMul = lerp(1, clamp(bpm / 120, 0.5, 3), params.kineticPendulum / 100)
+        var entropyJitter = (params.entropy / 100) * clamp(new Set(components.map(function (c) { return c.note })).size / 12, 0, 1) * 6
+        var bassComps = components.filter(function (c) { return c.freq < 250 })
+        var bassEnergy = bassComps.reduce(function (s, c) { return s + c.amplitude }, 0)
+        var inputGain = (params.inputGain != null) ? params.inputGain : 1
+        var uniqueNotes = new Set(components.map(function (c) { return c.note })).size
+        entropyJitter = (params.entropy / 100) * clamp(uniqueNotes / 12, 0, 1) * 6
+
+        var hw = w * 0.5, hh = h * 0.5
+        var radiusScale = (params.circRadiusScale != null) ? params.circRadiusScale : 1
+        // Maximum ring radius: 45% of the shorter canvas side
+        var maxR = Math.min(hw, hh) * 0.9 * radiusScale
+        var minR = maxR * 0.08   // inner dead zone
+
+        if (persistMode === 0) {
+            ctx.fillStyle = isLightBg ? "rgba(245,242,235,0.05)" : "rgba(10,10,15,0.05)"
+            ctx.fillRect(0, 0, w, h)
+        }
+
+        ctx.globalCompositeOperation = blendMode
+        var rng = seededRandom((frame.frame_index || 0) * 1337)
+        var sortedComps = components.slice().sort(function (a, b) { return a.freq - b.freq })
+        var activeCount = Math.min(sortedComps.length, Math.ceil(sortedComps.length * kineticMul))
+
+        var gravStr = (params.circChromaticGrav != null) ? params.circChromaticGrav / 100 : 0
+        var magStr = (params.circMagOrientation != null) ? params.circMagOrientation / 100 : 0
+        var intrStr = (params.circInterInstr != null) ? params.circInterInstr / 100 : 0
+        var useLinBand = (params.circFreqMapping != null) ? params.circFreqMapping : 0
+        // Total audible range 16 Hz–16 kHz → log2(1000) octaves
+        var LOG_RANGE = Math.log2(16000 / 16)
+
+        for (var i = 0; i < activeCount; i++) {
+            var c = sortedComps[i]
+            if (!c) continue
+
+            // Angle: 0 = top (12-o'clock), clockwise positive
+            var angle
+            if (useLinBand) {
+                // Linear Hz mapping: 0 Hz → 0, 20kHz → 2π
+                angle = (c.freq / 20000) * Math.PI * 2 - Math.PI * 0.5
+            } else {
+                // Log-spiral: each octave gets equal arc, all octaves around the circle
+                angle = (Math.log2(Math.max(c.freq, 16) / 16) / LOG_RANGE) * Math.PI * 2 - Math.PI * 0.5
+            }
+
+            // Amplitude drives radial position (louder → further from centre)
+            var ampScaled = clamp(c.amplitude * inputGain, 0, 1)
+            var freqLogNorm = clamp(Math.log2(Math.max(c.freq, 16) / 16) / Math.log2(1000), 0, 1)
+            var sizeExp = (params.sizeExponent != null) ? params.sizeExponent : 1.5
+            var freqDepth = (params.freqDepthEffect != null) ? params.freqDepthEffect / 100 : 1.0
+            var ampSizeStr = (params.amplitudeSizeStrength != null) ? params.amplitudeSizeStrength : 4
+            var magPortion = params.magnitudeSizeRatio / 100
+            var sizeFromAmp = lerp(1, 1 + ampScaled * ampSizeStr, magPortion)
+            var freqSizeFactor = 1.0 + Math.pow(1.0 - freqLogNorm, sizeExp) * freqDepth
+            var brightFromAmp = lerp(1, ampScaled, 1 - magPortion)
+
+            // Radial distance driven by frequency: low freq → inside, high freq → outside.
+            // Amplitude affects size/opacity (via sizeFromAmp & brightFromAmp) not radius.
+            var rDist = lerp(minR, maxR, freqLogNorm)
+
+            var cx = hw + Math.cos(angle) * rDist
+            var cy = hh + Math.sin(angle) * rDist
+
+            // Entropy jitter
+            if (entropyJitter > 0) {
+                cx += (rng() - 0.5) * entropyJitter * 2
+                cy += (rng() - 0.5) * entropyJitter * 2
+            }
+
+            // Chromatic gravity: pull toward centre
+            if (gravStr > 0.01) {
+                cx = lerp(cx, hw, gravStr * 0.3)
+                cy = lerp(cy, hh, gravStr * 0.3)
+            }
+            // Magnetic orientation: rotate toward tonic (0° = top)
+            if (magStr > 0.01) {
+                var mdx = cx - hw, mdy = cy - hh
+                var mang = Math.atan2(mdy, mdx)
+                var mdist = Math.hypot(mdx, mdy)
+                var mbl = lerp(mang, -Math.PI * 0.5, magStr * 0.25)
+                cx = hw + Math.cos(mbl) * mdist
+                cy = hh + Math.sin(mbl) * mdist
+            }
+            // Inter-instrumental: dissonant components pulled toward centre
+            if (intrStr > 0.01) {
+                var dissonance = clamp((c.ratio_d - 1) / 31, 0, 1)
+                cx = lerp(cx, hw, intrStr * dissonance * 0.2)
+                cy = lerp(cy, hh, intrStr * dissonance * 0.2)
+            }
+
+            var dissonance2 = clamp((c.ratio_d - 1) / 31, 0, 1)
+            var alpha = c.opacity * brightFromAmp
+            var ampDb = 20 * Math.log10(Math.max(ampScaled, 1e-10))
+            if (ampDb < params.amplitudeThreshold) continue
+            alpha = clamp(alpha, 0, 1)
+            if (alpha < 0.002) continue
+
+            var rgb = c.color_rgb || [200, 200, 200]
+            var r = rgb[0], g = rgb[1], bv = rgb[2]
+            var rn = r / 255, gn = g / 255, bn = bv / 255
+            var cmax = Math.max(rn, gn, bn), cmin = Math.min(rn, gn, bn), delta = cmax - cmin
+            var hue
+            if (delta < 0.001) { hue = c.hue }
+            else if (cmax === rn) { hue = (60 * ((gn - bn) / delta) % 360 + 360) % 360 }
+            else if (cmax === gn) { hue = (60 * ((bn - rn) / delta + 2) + 360) % 360 }
+            else { hue = (60 * ((rn - gn) / delta + 4) + 360) % 360 }
+            var sat = delta === 0 ? 0 : delta / (1 - Math.abs(cmax + cmin - 1))
+            var lit = (cmax + cmin) / 2
+            var satMul = lerp(1, 1 - (params.dissonanceDesat / 100) * 0.8, dissonance2)
+            var lightMul = lerp(1, 0.5 + ampScaled * 0.5, params.brightnessScaling / 100)
+            sat = Math.max(sat * satMul, params.saturationFloor / 100)
+            lit *= lightMul
+
+            var clarityVal = (c.clarity != null) ? c.clarity : 1
+            var vertices = Math.round(lerp(3, params.shapeComplexity, lerp(1, clarityVal, (params.acousticFriction / 100) * 0.5)))
+            var edgeSoftness = params.edgeSoftness / 100
+            var roughness = (params.harmonicRoughness / 100) * dissonance2
+            var defaultPx = (params.defaultParticleSize != null) ? params.defaultParticleSize : 4
+            var baseRadius = (defaultPx / 2) * sizeFromAmp * freqSizeFactor
+
+            cx += (rng() - 0.5) * dissonance2 * (params.fieldRendering / 100) * 20
+            cy += (rng() - 0.5) * dissonance2 * (params.fieldRendering / 100) * 20
+
+            var color = hsla(hue, clamp(sat, 0, 1), clamp(lit, 0.05, 0.95), alpha)
+            ctx.save()
+            this._drawShape(ctx, cx, cy, baseRadius, vertices, edgeSoftness, roughness, color, rng)
+            ctx.restore()
+        }
+    }
+
+    // ── Mode 4 (L-System 2D): Interval Branching ─────────────────────────────
+    // (Previously mode 4, now mode 1 in the new layout numbering)
     // ── Mode 5: Vector Interval Model (Relative Pathfinding) ─────────────────
     _renderVectorInterval(ctx, w, h, components, frame, params, blendMode, persistMode, isLightBg, time) {
         if (!components.length) return
@@ -896,11 +993,13 @@ export class RenderEngine {
         var dt = Math.min(Math.max(time - state.lastTime, 0), 0.1)
         state.lastTime = time
 
-        // Speed proportional to canvas size
-        var SPEED = Math.min(w, h) * 0.09
+        // Speed proportional to canvas size, scaled by lsGrowthSpeed param
+        var lsSpeed = (params.lsGrowthSpeed != null) ? params.lsGrowthSpeed : 0.09
+        var SPEED = Math.min(w, h) * lsSpeed
 
-        // Interval semitones → divergence angle (degrees)
-        var ANGLE_TABLE = [0, 18, 32, 48, 62, 74, 88, 82, 68, 52, 36, 20]
+        // Interval semitones → divergence angle — respects lsAngleSpread param
+        var lsAngleBase = (params.lsAngleSpread != null) ? params.lsAngleSpread : 18
+        var ANGLE_TABLE = [0, lsAngleBase, lsAngleBase * 1.78, lsAngleBase * 2.67, lsAngleBase * 3.44, lsAngleBase * 4.11, lsAngleBase * 4.89, lsAngleBase * 4.56, lsAngleBase * 3.78, lsAngleBase * 2.89, lsAngleBase * 2.0, lsAngleBase * 1.11]
 
         // Build current-frame note map (loudest component per note)
         var curNotes = {}
@@ -1006,12 +1105,13 @@ export class RenderEngine {
         if (persistMode !== 1) ctx.translate(state.viewOffsetX, state.viewOffsetY)
         ctx.globalCompositeOperation = blendMode
         ctx.lineCap = 'round'
+        var lsLW = (params.lsLineWidth != null) ? params.lsLineWidth : 2.2
 
         if (persistMode === 1) {
             // Painting: only draw the new segments added this frame
             for (var s = 0; s < newSegs.length; s++) {
                 var seg = newSegs[s]
-                ctx.lineWidth = Math.max(0.7, 2.2 - seg.gen * 0.45)
+                ctx.lineWidth = Math.max(0.5, lsLW - seg.gen * 0.45)
                 ctx.strokeStyle = 'rgba(' + Math.round(seg.rgb[0]) + ',' + Math.round(seg.rgb[1]) + ',' + Math.round(seg.rgb[2]) + ',0.9)'
                 ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke()
             }
@@ -1021,7 +1121,7 @@ export class RenderEngine {
                 var br = state.branches[b]
                 if (!br.segments.length) continue
                 var alpha = br.alive ? 0.88 : 0.4
-                ctx.lineWidth = Math.max(0.7, 2.2 - br.generation * 0.45)
+                ctx.lineWidth = Math.max(0.5, lsLW - br.generation * 0.45)
                 ctx.strokeStyle = 'rgba(' + Math.round(br.color[0]) + ',' + Math.round(br.color[1]) + ',' + Math.round(br.color[2]) + ',' + alpha + ')'
                 ctx.beginPath()
                 ctx.moveTo(br.segments[0].x1, br.segments[0].y1)
@@ -1033,7 +1133,8 @@ export class RenderEngine {
         ctx.restore()  // end viewport transform
 
         // Prune memory: dead branches with no segments, or over-cap
-        if (state.branches.length > 300) {
+        var lsMaxBr = (params.lsMaxBranches != null) ? params.lsMaxBranches : 300
+        if (state.branches.length > lsMaxBr) {
             state.branches = state.branches.filter(function (br) { return br.alive || br.segments.length > 0 })
         }
     }

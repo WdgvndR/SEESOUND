@@ -22,7 +22,7 @@ function fmtTime(secs) {
  *   onSeeked     — (time: number) => void  — fired after a seek completes
  *   onEnded      — () => void  — fired when track finishes
  */
-export default function MusicPlayer({ audioFile, onFileSelect, onReady, audioRef: extAudioRef, onPlay, onPause, onSeeked, onEnded, isBuffering }) {
+export default function MusicPlayer({ audioFile, onFileSelect, onReady, audioRef: extAudioRef, onPlay, onPause, onSeeked, onEnded, isBuffering, playLocked }) {
     const fileInputRef = useRef(null)
     const internalAudioRef = useRef(null)
     // Use external ref if supplied, otherwise internal
@@ -243,34 +243,34 @@ export default function MusicPlayer({ audioFile, onFileSelect, onReady, audioRef
                     <button
                         className="player-btn"
                         onClick={() => handleSkip(-10)}
-                        disabled={!trackName}
-                        title="Back 10s"
+                        disabled={!trackName || playLocked}
+                        title={playLocked ? 'Painting in progress…' : 'Back 10s'}
                     >⏮ 10s</button>
 
                     {/* Play / Pause */}
                     <button
-                        className={`player-btn player-btn-main${isBuffering ? ' player-btn-buffering' : ''}`}
+                        className={`player-btn player-btn-main${isBuffering ? ' player-btn-buffering' : ''}${playLocked ? ' player-btn-locked' : ''}`}
                         onClick={handlePlayPause}
-                        disabled={!trackName || isBuffering}
-                        title={isBuffering ? 'Buffering…' : isPlaying ? 'Pause' : 'Play'}
+                        disabled={!trackName || isBuffering || playLocked}
+                        title={playLocked ? 'Painting in progress…' : isBuffering ? 'Buffering…' : isPlaying ? 'Pause' : 'Play'}
                     >
-                        {isBuffering ? <span className="player-spinner" /> : isPlaying ? '⏸' : '▶'}
+                        {playLocked ? '🎨' : isBuffering ? <span className="player-spinner" /> : isPlaying ? '⏸' : '▶'}
                     </button>
 
                     {/* Stop */}
                     <button
                         className="player-btn"
                         onClick={handleStop}
-                        disabled={!trackName}
-                        title="Stop"
+                        disabled={!trackName || playLocked}
+                        title={playLocked ? 'Painting in progress…' : 'Stop'}
                     >⏹</button>
 
                     {/* Skip 10s */}
                     <button
                         className="player-btn"
                         onClick={() => handleSkip(10)}
-                        disabled={!trackName}
-                        title="Forward 10s"
+                        disabled={!trackName || playLocked}
+                        title={playLocked ? 'Painting in progress…' : 'Forward 10s'}
                     >10s ⏭</button>
                 </div>
 
